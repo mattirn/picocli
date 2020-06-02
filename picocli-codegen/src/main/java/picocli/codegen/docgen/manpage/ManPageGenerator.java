@@ -115,15 +115,18 @@ public class ManPageGenerator {
             footerHeading = "%nConverting to Man Page Format%n%n",
             footer = {"Use the `asciidoctor` tool to convert the generated AsciiDoc files to man pages in roff format:",
                     "",
-                    "`asciidoctor --backend=manpage --source-dir=SOURCE_DIR --destination-dir=DESTINATION` ",
+                    "`asciidoctor --backend=manpage --source-dir=SOURCE_DIR --destination-dir=DESTINATION *.adoc`",
                     "",
                     "Point the SOURCE_DIR to either the `--outdir` directory or the `--template-dir` directory. Use some other directory as the DESTINATION.",
                     "See https://asciidoctor.org/docs/user-manual/#man-pages",
                     "See http://man7.org/linux/man-pages/man7/roff.7.html",
                     "",
+                    "In order to generate localized man pages, set the target locale by specifying the user.language, user.country, and user.variant system properties.",
+                    "The generated usage help will then contain information retrieved from the resource bundle based on the user locale.",
+                    "",
                     "Example",
                     "-------",
-                    "  java -cp \"myapp.jar;picocli-4.2.1-SNAPSHOT.jar;picocli-codegen-4.2.1-SNAPSHOT.jar\" " +
+                    "  java -Duser.language=de -cp \"myapp.jar;picocli-4.3.3-SNAPSHOT.jar;picocli-codegen-4.3.3-SNAPSHOT.jar\" " +
                             "picocli.codegen.docgen.manpage.ManPageGenerator my.pkg.MyClass"
             }
     )
@@ -193,7 +196,7 @@ public class ManPageGenerator {
             // recursively create man pages for subcommands
             for (CommandLine sub : spec.subcommands().values()) {
                 CommandSpec subSpec = sub.getCommandSpec();
-                if (done.contains(subSpec)) {continue;}
+                if (done.contains(subSpec) || subSpec.usageMessage().hidden()) {continue;}
                 done.add(subSpec);
                 result = generateManPage(config, subSpec);
                 if (result != CommandLine.ExitCode.OK) {
@@ -370,19 +373,25 @@ public class ManPageGenerator {
     }
 
     static void genOptions(PrintWriter pw, CommandSpec spec) {
-        if (spec.options().isEmpty()) {
-            return;
+        List<OptionSpec> options = new ArrayList<OptionSpec>(spec.options()); // options are stored in order of declaration
+
+        // remove hidden options
+        for (Iterator<OptionSpec> iter = options.iterator(); iter.hasNext();) {
+            if (iter.next().hidden()) { iter.remove(); }
         }
-        pw.printf("// tag::picocli-generated-man-section-options[]%n");
-        pw.printf("== Options%n");
 
         IOptionRenderer optionRenderer = spec.commandLine().getHelp().createDefaultOptionRenderer();
         IParamLabelRenderer paramLabelRenderer = spec.commandLine().getHelp().createDefaultParamLabelRenderer();
         IParameterRenderer parameterRenderer = spec.commandLine().getHelp().createDefaultParameterRenderer();
 
-        List<OptionSpec> options = new ArrayList<OptionSpec>(spec.options()); // options are stored in order of declaration
         List<ArgGroupSpec> groups = optionListGroups(spec);
         for (ArgGroupSpec group : groups) { options.removeAll(group.options()); }
+
+        if (options.isEmpty() && !spec.usageMessage().showEndOfOptionsDelimiterInUsageHelp()) {
+            return;
+        }
+        pw.printf("// tag::picocli-generated-man-section-options[]%n");
+        pw.printf("== Options%n");
 
         Comparator<OptionSpec> optionSort = spec.usageMessage().sortOptions()
                 ? new SortByShortestOptionNameAlphabetically()
@@ -394,6 +403,12 @@ public class ManPageGenerator {
             writeOption(pw, optionRenderer, paramLabelRenderer, option);
         }
 
+        if (spec.usageMessage().showEndOfOptionsDelimiterInUsageHelp()) {
+            CommandLine cmd = new CommandLine(spec).setColorScheme(COLOR_SCHEME);
+            CommandLine.Help help = cmd.getHelp();
+            writeEndOfOptions(pw, optionRenderer, paramLabelRenderer, help.END_OF_OPTIONS_OPTION);
+        }
+
         // now create a custom option section for each arg group that has a heading
         Collections.sort(groups, new SortByOrder<ArgGroupSpec>());
         for (ArgGroupSpec group : groups) {
@@ -402,7 +417,9 @@ public class ManPageGenerator {
             pw.printf("== %s%n", COLOR_SCHEME.text(heading));
 
             for (PositionalParamSpec positional : group.positionalParameters()) {
-                writePositional(pw, positional, parameterRenderer, paramLabelRenderer);
+                if (!positional.hidden()) {
+                    writePositional(pw, positional, parameterRenderer, paramLabelRenderer);
+                }
             }
             List<OptionSpec> groupOptions = new ArrayList<OptionSpec>(group.options());
             if (optionSort != null) {
@@ -450,8 +467,28 @@ public class ManPageGenerator {
         }
     }
 
+    /** Write the end of options. */
+    private static void writeEndOfOptions(PrintWriter pw, IOptionRenderer optionRenderer, IParamLabelRenderer paramLabelRenderer, OptionSpec option) {
+        pw.println();
+        Text[][] rows = optionRenderer.render(option, paramLabelRenderer, COLOR_SCHEME);
+        pw.printf("%s::%n", join("", rows[0][1], rows[0][3]));
+        String description = String.valueOf(rows[0][4]);
+        // ignore "${picocli.endofoptions.description:-" and "}"
+        pw.printf("  %s%n",  description.substring(36,description.length()-1));
+    }
+
     static void genPositionalArgs(PrintWriter pw, CommandSpec spec) {
-        if (spec.positionalParameters().isEmpty() && !spec.usageMessage().showAtFileInUsageHelp()) {
+        List<PositionalParamSpec> positionals = new ArrayList<PositionalParamSpec>(spec.positionalParameters());
+        // remove hidden params
+        for (Iterator<PositionalParamSpec> iter = positionals.iterator(); iter.hasNext();) {
+            if (iter.next().hidden()) { iter.remove(); }
+        }
+        // positional parameters that are part of a group
+        // are shown in the custom option section for that group
+        List<ArgGroupSpec> groups = optionListGroups(spec);
+        for (ArgGroupSpec group : groups) { positionals.removeAll(group.positionalParameters()); }
+
+        if (positionals.isEmpty() && !spec.usageMessage().showAtFileInUsageHelp()) {
             return;
         }
         pw.printf("// tag::picocli-generated-man-section-arguments[]%n");
@@ -466,12 +503,6 @@ public class ManPageGenerator {
             writePositional(pw, help.AT_FILE_POSITIONAL_PARAM, parameterRenderer, paramLabelRenderer);
         }
 
-        // positional parameters that are part of a group
-        // are shown in the custom option section for that group
-        List<PositionalParamSpec> positionals = new ArrayList<PositionalParamSpec>(spec.positionalParameters());
-        List<ArgGroupSpec> groups = optionListGroups(spec);
-        for (ArgGroupSpec group : groups) { positionals.removeAll(group.positionalParameters()); }
-
         for (PositionalParamSpec positional : positionals) {
             writePositional(pw, positional, parameterRenderer, paramLabelRenderer);
         }
@@ -481,6 +512,15 @@ public class ManPageGenerator {
     }
 
     static void genCommands(PrintWriter pw, CommandSpec spec) {
+
+        // remove hidden subcommands before tags are added
+        Map<String, CommandLine> subCommands = new LinkedHashMap<String, CommandLine>(spec.subcommands());
+        for (Iterator<Map.Entry<String, CommandLine>> iter = subCommands.entrySet().iterator(); iter.hasNext();) {
+            if (iter.next().getValue().getCommandSpec().usageMessage().hidden()) {
+                iter.remove();
+            }
+        }
+
         if (spec.subcommands().isEmpty()) {
             return;
         }

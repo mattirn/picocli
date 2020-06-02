@@ -154,7 +154,9 @@ public class ModelArgSpecTest {
                 .description("desc")
                 .descriptionKey("key")
                 .type(Map.class)
-                .auxiliaryTypes(Integer.class, Double.class);
+                .auxiliaryTypes(Integer.class, Double.class)
+                .inherited(true)
+                .scopeType(CommandLine.ScopeType.INHERIT);
 
         PositionalParamSpec p1 = positional.build();
         assertEquals(p1, p1);
@@ -168,6 +170,10 @@ public class ModelArgSpecTest {
         assertNotEquals(p1, positional.descriptionKey("key").type(List.class).build());
         assertNotEquals(p1, positional.type(Map.class).auxiliaryTypes(Short.class).build());
         assertEquals(p1, positional.auxiliaryTypes(Integer.class, Double.class).build());
+        assertNotEquals(p1, positional.inherited(false).build());
+        assertEquals(p1, positional.inherited(true).build());
+        assertNotEquals(p1, positional.scopeType(CommandLine.ScopeType.LOCAL).build());
+        assertEquals(p1, positional.scopeType(CommandLine.ScopeType.INHERIT).build());
     }
 
     @Test
@@ -299,6 +305,59 @@ public class ModelArgSpecTest {
     public void testArgSpecBuilderObjectBindingToString() {
         Builder builder = OptionSpec.builder("-x");
         assertEquals("ObjectBinding(value=null)", builder.getter().toString());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testOptionSpecBuilderSplitRegexDisallowsNull() {
+        OptionSpec.builder("-x").splitRegex(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testPositionalParamSpecBuilderSplitRegexDisallowsNull() {
+        PositionalParamSpec.builder().splitRegex(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testOptionSpecBuilderSplitRegexSynopsisLabelDisallowsNull() {
+        OptionSpec.builder("-x").splitRegexSynopsisLabel(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testPositionalParamSpecBuilderSplitRegexSynopsisLabelDisallowsNull() {
+        PositionalParamSpec.builder().splitRegexSynopsisLabel(null);
+    }
+
+    @Test
+    public void testArgSpecBuilderSplitRegex() {
+        Builder builder = OptionSpec.builder("-x").type(String[].class).splitRegex(";");
+        assertEquals("split regex", ";", builder.splitRegex());
+        assertEquals("split regex", ";", builder.build().splitRegex());
+
+        PositionalParamSpec.Builder pb = PositionalParamSpec.builder().type(String[].class).splitRegex(";");
+        assertEquals("split regex", ";", pb.splitRegex());
+        assertEquals("split regex", ";", pb.build().splitRegex());
+    }
+
+    @Test
+    public void testArgSpecBuilderSplitRegexSynopsisLabel() {
+        Builder builder = OptionSpec.builder("-x").splitRegexSynopsisLabel(";");
+        assertEquals("split regex synopsis label", ";", builder.splitRegexSynopsisLabel());
+        assertEquals("split regex synopsis label", ";", builder.build().splitRegexSynopsisLabel());
+
+        PositionalParamSpec.Builder pb = PositionalParamSpec.builder().splitRegexSynopsisLabel(";");
+        assertEquals("split regex synopsis label", ";", pb.splitRegexSynopsisLabel());
+        assertEquals("split regex synopsis label", ";", pb.build().splitRegexSynopsisLabel());
+    }
+
+    @Test
+    public void testArgSpecBuilderSplitRegexAndSplitRegexSynopsisLabel() {
+        Builder builder = OptionSpec.builder("-x").type(String[].class).splitRegex("#").splitRegexSynopsisLabel(";");
+        assertEquals("split regex synopsis label", ";", builder.splitRegexSynopsisLabel());
+        assertEquals("split regex synopsis label", ";", builder.build().splitRegexSynopsisLabel());
+
+        PositionalParamSpec.Builder pb = PositionalParamSpec.builder().type(String[].class).splitRegex("#").splitRegexSynopsisLabel(";");
+        assertEquals("split regex synopsis label", ";", pb.splitRegexSynopsisLabel());
+        assertEquals("split regex synopsis label", ";", pb.build().splitRegexSynopsisLabel());
     }
 
     @Test

@@ -25,8 +25,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import picocli.CommandLine.*;
@@ -107,7 +109,7 @@ public class AutoComplete {
                     "",
                     "Example",
                     "-------",
-                    "  java -cp \"myapp.jar;picocli-4.2.1-SNAPSHOT.jar\" \\",
+                    "  java -cp \"myapp.jar;picocli-4.3.3-SNAPSHOT.jar\" \\",
                     "              picocli.AutoComplete my.pkg.MyClass"
             },
             exitCodeListHeading = "%nExit Codes:%n",
@@ -198,22 +200,22 @@ public class AutoComplete {
     }
 
     /**
-     * Command that generates a Bash/ZSH completion script for its parent command (which should be the top-level command).
+     * Command that generates a Bash/ZSH completion script for its top-level command.
      * <p>
      * This class can be used as a subcommand for the top-level command in your application.
      * Users can then install completion for the top-level command by running the following command:
      * </p><pre>
-     * source &lt;(top-level-command generate-completion)
+     * source &lt;(top-level-command [sub-command] generate-completion)
      * </pre>
      * @since 4.1
      */
     @Command(name = "generate-completion", version = "generate-completion " + CommandLine.VERSION,
             mixinStandardHelpOptions = true,
             description = {
-                "Generate bash/zsh completion script for ${PARENT-COMMAND-NAME:-the parent command of this command}.",
-                "Run the following command to give `${PARENT-COMMAND-NAME:-$PARENTCOMMAND}` TAB completion in the current shell:",
+                "Generate bash/zsh completion script for ${ROOT-COMMAND-NAME:-the root command of this command}.",
+                "Run the following command to give `${ROOT-COMMAND-NAME:-$PARENTCOMMAND}` TAB completion in the current shell:",
                 "",
-                "  source <(${PARENT-COMMAND-NAME:-$PARENTCOMMAND} ${COMMAND-NAME})",
+                "  source <(${PARENT-COMMAND-FULL-NAME:-$PARENTCOMMAND} ${COMMAND-NAME})",
                 ""},
             optionListHeading = "Options:%n",
             helpCommand = true
@@ -224,8 +226,8 @@ public class AutoComplete {
 
         public void run() {
             String script = AutoComplete.bash(
-                    spec.parent().name(),
-                    spec.parent().commandLine());
+                    spec.root().name(),
+                    spec.root().commandLine());
             // not PrintWriter.println: scripts with Windows line separators fail in strange ways!
             spec.commandLine().getOut().print(script);
             spec.commandLine().getOut().print('\n');
@@ -233,7 +235,7 @@ public class AutoComplete {
         }
     }
 
-    private static interface Function<T, V> {
+    private interface Function<T, V> {
         V apply(T t);
     }
 
@@ -262,7 +264,7 @@ public class AutoComplete {
         public String apply(CharSequence value) { return value.toString(); }
     }
 
-    private static interface Predicate<T> {
+    private interface Predicate<T> {
         boolean test(T t);
     }
     private static class BooleanArgFilter implements Predicate<ArgSpec> {
@@ -602,7 +604,18 @@ public class AutoComplete {
         String flagOptionNames = optionNames(filter(commandSpec.options(), new BooleanArgFilter()));
         List<OptionSpec> argOptionFields = filter(commandSpec.options(), negate(new BooleanArgFilter()));
         String argOptionNames = optionNames(argOptionFields);
-        String commands = concat(" ", new ArrayList<String>(commandLine.getSubcommands().keySet())).trim();
+
+        Set<String> subCommands = commandLine.getSubcommands().keySet();
+        // If the command is a HelpCommand, append parent subcommands to the autocompletion list.
+        if (commandLine.getParent() != null && commandLine.getCommand() instanceof HelpCommand) {
+            subCommands = new LinkedHashSet<String>(subCommands);
+            for (CommandLine subCommandLine : commandLine.getParent().getSubcommands().values()) {
+                if (commandLine == subCommandLine) { continue; }  // Skip the HelpCommand itself
+                if (subCommandLine.getCommandSpec().usageMessage().hidden()) { continue; } // #887 skip hidden subcommands
+                subCommands.add(subCommandLine.getCommandName());
+            }
+        }
+        String commands = concat(" ", new ArrayList<String>(subCommands)).trim();
 
         // Generate the header: the function declaration, CURR_WORD, PREV_WORD and COMMANDS, FLAG_OPTS and ARG_OPTS.
         StringBuilder buff = new StringBuilder(1024);
@@ -707,14 +720,12 @@ public class AutoComplete {
             return "";
         }
 
-        StringBuilder buff = new StringBuilder(1024);
-        buff.append("\n");
-        buff.append("  compopt +o default\n");
-        buff.append("\n");
-        buff.append("  case ${prev_word} in\n");
-        buff.append(optionsCases);
-        buff.append("  esac\n");
-        return buff.toString();
+        return "\n"
+                + "  compopt +o default\n"
+                + "\n"
+                + "  case ${prev_word} in\n"
+                + optionsCases
+                + "  esac\n";
     }
 
     private static String generateOptionsCases(List<OptionSpec> argOptionFields, String indent, String currWord) {

@@ -2,7 +2,6 @@ package picocli;
 
 import org.junit.Test;
 
-import picocli.CommandLine.Command;
 import picocli.CommandLine.Help.Visibility;
 import picocli.CommandLine.ITypeConverter;
 import picocli.CommandLine.InitializationException;
@@ -398,5 +397,43 @@ public class ModelOptionSpecTest {
     public void testOptionSpec_fallbackValueSetter() {
         OptionSpec.Builder builder = OptionSpec.builder("-x").fallbackValue("fallback");
         assertEquals("fallback", builder.fallbackValue());
+    }
+
+    @Test
+    public void testEmptyUsageSplit() {
+        assertEquals("", OptionSpec.builder("-x").build().splitRegexSynopsisLabel());
+    }
+
+    @Test
+    public void testGetterAndSetterOfUsageSplit() {
+        OptionSpec.Builder builder = OptionSpec.builder("-x");
+        builder.auxiliaryTypes(Integer.class, Integer.TYPE)
+            .splitRegex("\\|")
+            .splitRegexSynopsisLabel("|");
+        assertEquals("\\|", builder.splitRegex());
+        assertEquals("|", builder.splitRegexSynopsisLabel());
+    }
+
+    @Test
+    public void testUsageSplitEquals() {
+        OptionSpec.Builder option = OptionSpec.builder("-x")
+            .arity("1")
+            .hideParamSyntax(true)
+            .required(true)
+            .splitRegex("\\|")
+            .splitRegexSynopsisLabel("|")
+            .description("desc")
+            .descriptionKey("key")
+            .type(Map.class)
+            .auxiliaryTypes(Integer.class, Double.class)
+            .help(true)
+            .usageHelp(true)
+            .versionHelp(true)
+            .order(123);
+
+        OptionSpec p1 = option.build();
+        assertEquals(p1, p1);
+        assertEquals(p1, option.build());
+        assertNotEquals(p1, option.splitRegexSynopsisLabel("\\\\?").build());
     }
 }

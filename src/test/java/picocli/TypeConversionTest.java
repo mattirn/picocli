@@ -676,7 +676,7 @@ public class TypeConversionTest {
         try {
             commandLine.parseArgs("anything");
         } catch (CommandLine.ParameterException ex) {
-            assertEquals("Invalid value for positional parameter at index 0..* (<sqlTypeParam>): cannot convert 'anything' to int (java.lang.IllegalStateException: bad converter)", ex.getMessage());
+            assertEquals("Invalid value for positional parameter at index 0 (<sqlTypeParam>): cannot convert 'anything' to int (java.lang.IllegalStateException: bad converter)", ex.getMessage());
         }
     }
     static class CustomConverter implements ITypeConverter<Integer> {
@@ -917,7 +917,7 @@ public class TypeConversionTest {
         params.timeUnitList = list;
         new CommandLine(params).parseArgs("-timeUnitList", "SECONDS", "MICROSECONDS", "SECONDS");
         assertEquals(Arrays.asList(SECONDS, MICROSECONDS, SECONDS), params.timeUnitList);
-        assertSame(list, params.timeUnitList);
+        assertNotSame(list, params.timeUnitList);
     }
     @Test
     public void testConcreteCollectionParametersAreInstantiatedIfNull() {

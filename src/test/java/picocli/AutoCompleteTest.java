@@ -16,7 +16,6 @@
 package picocli;
 
 import org.hamcrest.CoreMatchers;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.Assertion;
@@ -187,6 +186,22 @@ public class AutoCompleteTest {
         assertEquals(expected, script);
     }
 
+    @Test
+    public void helpCommand() {
+        CommandLine hierarchy = new CommandLine(new AutoCompleteTest.TopLevel())
+                .addSubcommand("sub1", new AutoCompleteTest.Sub1())
+                .addSubcommand("sub2", new CommandLine(new AutoCompleteTest.Sub2())
+                        .addSubcommand("subsub1", new AutoCompleteTest.Sub2Child1())
+                        .addSubcommand("subsub2", new AutoCompleteTest.Sub2Child2())
+                        .addSubcommand("subsub3", new AutoCompleteTest.Sub2Child3())
+                )
+                .addSubcommand(new CommandLine.HelpCommand());
+        String script = AutoComplete.bash("picocompletion-demo-help", hierarchy);
+        String expected = format(loadTextFromClasspath("/picocompletion-demo-help_completion.bash"),
+                CommandLine.VERSION, spaced(TimeUnit.values()));
+        assertEquals(expected, script);
+    }
+
     private static String spaced(Object[] values) {
         StringBuilder result = new StringBuilder();
         for (Object value : values) {
@@ -282,7 +297,7 @@ public class AutoCompleteTest {
             "%n" +
             "Example%n" +
             "-------%n" +
-            "  java -cp \"myapp.jar;picocli-4.2.1-SNAPSHOT.jar\" \\%n" +
+            "  java -cp \"myapp.jar;picocli-4.3.3-SNAPSHOT.jar\" \\%n" +
             "              picocli.AutoComplete my.pkg.MyClass%n");
 
     @Test
@@ -323,7 +338,7 @@ public class AutoCompleteTest {
         exit.expectSystemExitWithStatus(AutoComplete.EXIT_CODE_INVALID_INPUT);
         exit.checkAssertionAfterwards(new Assertion() {
             public void checkAssertion() {
-                String expected = String.format("Missing required parameter: <commandLineFQCN>%n") + AUTO_COMPLETE_APP_USAGE;
+                String expected = String.format("Missing required parameter: '<commandLineFQCN>'%n") + AUTO_COMPLETE_APP_USAGE;
                 assertEquals(expected, systemErrRule.getLog());
             }
         });
@@ -334,7 +349,7 @@ public class AutoCompleteTest {
     @Test
     public void testAutoCompleteRequiresCommandLineFQCN_NoSystemExit() {
         AutoComplete.main();
-        String expected = String.format("Missing required parameter: <commandLineFQCN>%n") + AUTO_COMPLETE_APP_USAGE;
+        String expected = String.format("Missing required parameter: '<commandLineFQCN>'%n") + AUTO_COMPLETE_APP_USAGE;
         assertEquals(expected, systemErrRule.getLog());
     }
 
@@ -1786,4 +1801,55 @@ public class AutoCompleteTest {
                 "\n", commandName, CommandLine.VERSION);
     }
 
+
+    @Test
+    public void testNestedCompletion() {
+        @Command(name="Demo", subcommands = { NestedLevel1.class } )
+        class NestedCompletionDemo implements Runnable {
+            public void run() { }
+        }
+
+        CommandLine root = new CommandLine(new NestedCompletionDemo());
+        String expectedRoot = String.format("" +
+                "Usage: Demo [COMMAND]%n" +
+                "Commands:%n" +
+                "  Level1%n");
+        assertEquals(expectedRoot, root.getUsageMessage(CommandLine.Help.Ansi.OFF));
+
+        CommandLine level2 = root
+                .getSubcommands().get("Level1")
+                .getSubcommands().get("Level2");
+        String expectedLevel2 = String.format("" +
+                "Usage: Demo Level1 Level2 [COMMAND]%n" +
+                "Commands:%n" +
+                "  generate-completion  Generate bash/zsh completion script for Demo.%n");
+        assertEquals(expectedLevel2, level2.getUsageMessage(CommandLine.Help.Ansi.OFF));
+
+        CommandLine gen = level2
+                .getSubcommands().get("generate-completion");
+        gen.getCommandSpec().usageMessage().hidden(true);
+        String expectedGen = String.format("" +
+                "Usage: Demo Level1 Level2 generate-completion [-hV]%n" +
+                "Generate bash/zsh completion script for Demo.%n" +
+                "Run the following command to give `Demo` TAB completion in the current shell:%n" +
+                "%n" +
+                "  source <(Demo Level1 Level2 generate-completion)%n" +
+                "%n" +
+                "Options:%n" +
+                "  -h, --help      Show this help message and exit.%n" +
+                "  -V, --version   Print version information and exit.%n");
+        assertEquals(expectedGen, gen.getUsageMessage(CommandLine.Help.Ansi.OFF));
+    }
+
+    @Command(name = "Level2", subcommands = {picocli.AutoComplete.GenerateCompletion.class})
+    static class NestedLevel2 implements Runnable {
+        public void run() {
+        }
+    }
+
+    @Command(name = "Level1", subcommands = {NestedLevel2.class})
+    static class NestedLevel1 implements Runnable {
+        public void run() {
+        }
+    }
 }

@@ -15,6 +15,7 @@
  */
 package picocli;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.ProvideSystemProperty;
@@ -83,7 +84,7 @@ public class LenientParsingTest {
         cmd.parseArgs(new String[0]);
 
         assertEquals(1, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameter: <mandatory>", cmd.getParseResult().errors().get(0).getMessage());
+        assertEquals("Missing required parameter: '<mandatory>'", cmd.getParseResult().errors().get(0).getMessage());
     }
     @Test
     public void testMissingRequiredParams1() {
@@ -97,12 +98,13 @@ public class LenientParsingTest {
 
         cmd.parseArgs(new String[0]);
         assertEquals(2, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameters: <mandatory>, <anotherMandatory>", cmd.getParseResult().errors().get(0).getMessage());
-        assertEquals("Missing required parameter: <anotherMandatory>", cmd.getParseResult().errors().get(1).getMessage());
+        assertEquals("Missing required parameters: '<mandatory>', '<anotherMandatory>'", cmd.getParseResult().errors().get(0).getMessage());
+//        assertEquals("Missing required parameters: '<mandatory>', '<anotherMandatory>'", cmd.getParseResult().errors().get(1).getMessage());
+        assertEquals("Missing required parameter: '<anotherMandatory>'", cmd.getParseResult().errors().get(1).getMessage());
 
         cmd.parseArgs(new String[] {"firstonly"});
         assertEquals(1, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameter: <anotherMandatory>", cmd.getParseResult().errors().get(0).getMessage());
+        assertEquals("Missing required parameter: '<anotherMandatory>'", cmd.getParseResult().errors().get(0).getMessage());
     }
     @Test
     public void testMissingRequiredParams2() {
@@ -116,7 +118,7 @@ public class LenientParsingTest {
 
         cmd.parseArgs(new String[0]);
         assertEquals(1, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameter: <mandatory>", cmd.getParseResult().errors().get(0).getMessage());
+        assertEquals("Missing required parameter: '<mandatory>'", cmd.getParseResult().errors().get(0).getMessage());
     }
     @Test
     public void testMissingRequiredParamsWithOptions() {
@@ -131,13 +133,15 @@ public class LenientParsingTest {
 
         cmd.parseArgs(new String[] {"-t", "-v", "mandatory"});
         assertEquals(1, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameter: <alsoMandatory>", cmd.getParseResult().errors().get(0).getMessage());
+        assertEquals("Missing required parameter: '<alsoMandatory>'", cmd.getParseResult().errors().get(0).getMessage());
 
         cmd.parseArgs(new String[] {"-t"});
         assertEquals(3, cmd.getParseResult().errors().size());
-        assertEquals("Missing required options [-v, params[0]=<mandatory>, params[1]=<alsoMandatory>]", cmd.getParseResult().errors().get(0).getMessage());
-        assertEquals("Missing required parameters: <mandatory>, <alsoMandatory>", cmd.getParseResult().errors().get(1).getMessage());
-        assertEquals("Missing required parameter: <alsoMandatory>", cmd.getParseResult().errors().get(2).getMessage());
+        assertEquals("Missing required options and parameters: '-v', '<mandatory>', '<alsoMandatory>'", cmd.getParseResult().errors().get(0).getMessage());
+//        assertEquals("Missing required options and parameters: '-v', '<mandatory>', '<alsoMandatory>'", cmd.getParseResult().errors().get(1).getMessage());
+//        assertEquals("Missing required options and parameters: '-v', '<mandatory>', '<alsoMandatory>'", cmd.getParseResult().errors().get(2).getMessage());
+        assertEquals("Missing required parameters: '<mandatory>', '<alsoMandatory>'", cmd.getParseResult().errors().get(1).getMessage());
+        assertEquals("Missing required parameter: '<alsoMandatory>'", cmd.getParseResult().errors().get(2).getMessage());
     }
     @Test
     public void testMissingRequiredParamWithOption() {
@@ -150,7 +154,7 @@ public class LenientParsingTest {
 
         cmd.parseArgs(new String[] {"-t"});
         assertEquals(1, cmd.getParseResult().errors().size());
-        assertEquals("Missing required parameter: <mandatory>", cmd.getParseResult().errors().get(0).getMessage());
+        assertEquals("Missing required parameter: '<mandatory>'", cmd.getParseResult().errors().get(0).getMessage());
     }
 
     @Test
@@ -323,6 +327,8 @@ public class LenientParsingTest {
         assertEquals("positional parameter at index 0..* (<all>) should be specified only once", parseResult.errors().get(4).getMessage());
         assertEquals("Unmatched arguments from index 0: 'NOT_AN_INT', '-unknown', '2', '3'", parseResult.errors().get(5).getMessage());
     }
+
+//    @Ignore("Requires https://github.com/remkop/picocli/issues/995")
     @Test
     public void testAnyExceptionWrappedInParameterException() {
         class App {
@@ -338,12 +344,11 @@ public class LenientParsingTest {
         assertEquals(1, parseResult.errors().size());
 
         assertTrue(parseResult.errors().get(0) instanceof ParameterException);
-        assertTrue(parseResult.errors().get(0).getCause() instanceof IllegalStateException);
+        assertTrue(parseResult.errors().get(0).getCause() instanceof NoSuchMethodException);
 
-        assertEquals("IllegalStateException: Queue full while processing argument " +
-                        "at or before arg[1] 'a,b,c' in [-queue, a,b,c]: java.lang.IllegalStateException: Queue full",
+        assertEquals("NoSuchMethodException: java.util.concurrent.ArrayBlockingQueue.<init>() while processing argument at or before arg[1] 'a,b,c' in [-queue, a,b,c]: java.lang.NoSuchMethodException: java.util.concurrent.ArrayBlockingQueue.<init>()",
                 parseResult.errors().get(0).getMessage());
-        assertEquals("Queue full", parseResult.errors().get(0).getCause().getMessage());
+        assertEquals("java.util.concurrent.ArrayBlockingQueue.<init>()", parseResult.errors().get(0).getCause().getMessage());
     }
 
 }

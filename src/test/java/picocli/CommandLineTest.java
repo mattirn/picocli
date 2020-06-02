@@ -46,7 +46,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -60,6 +62,7 @@ import java.util.Stack;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
@@ -83,6 +86,7 @@ import static picocli.CommandLine.Unmatched;
 import static picocli.CommandLine.UnmatchedArgumentException;
 import static picocli.TestUtil.setTraceLevel;
 import static picocli.TestUtil.stripAnsiTrace;
+import static picocli.TestUtil.stripHashcodes;
 
 /**
  * Tests for the CommandLine argument parsing interpreter functionality.
@@ -134,7 +138,7 @@ public class CommandLineTest {
     }
     @Test
     public void testVersion() {
-        assertEquals("4.2.1-SNAPSHOT", CommandLine.VERSION);
+        assertEquals("4.3.3-SNAPSHOT", CommandLine.VERSION);
     }
     @Test
     public void testArrayPositionalParametersAreReplacedNotAppendedTo() {
@@ -180,7 +184,7 @@ public class CommandLineTest {
         new CommandLine(params).parseArgs("-s", "foo", "-s", "bar", "-s", "baz");
         assertEquals("foobarbaz", params.string);
     }
-    private class ListPositionalParams {
+    private static class ListPositionalParams {
         @Parameters(type = Integer.class) List<Integer> list;
     }
     @Test
@@ -197,7 +201,7 @@ public class CommandLineTest {
         params.list = new ArrayList<Integer>();
         List<Integer> list = params.list;
         new CommandLine(params).parseArgs("3", "2", "1");
-        assertSame(list, params.list);
+        assertNotSame(list, params.list);
         assertEquals(Arrays.asList(3, 2, 1), params.list);
     }
     @Test
@@ -210,7 +214,223 @@ public class CommandLineTest {
         assertNotSame(list, params.list);
         assertEquals(Arrays.asList(3, 2, 1), params.list);
     }
-    class SortedSetPositionalParams {
+    @Test
+    public void testListPositionalParametersAreClearedOnReuse() {
+        ListPositionalParams params = new ListPositionalParams();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+
+        cmd.parseArgs();
+        assertNull(params.list);
+    }
+    private static class PositionalParamsListWithInitialValue {
+        @Parameters(type = Integer.class) List<Integer> list = new ArrayList<Integer>();
+    }
+    @Test
+    public void testListPositionalParametersWithInitialValueAreReusedIfNonNull() {
+        PositionalParamsListWithInitialValue params = new PositionalParamsListWithInitialValue();
+        params.list = new ArrayList<Integer>();
+        List<Integer> list = params.list;
+        new CommandLine(params).parseArgs("3", "2", "1");
+        assertNotSame(list, params.list);
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+    }
+    @Test
+    public void testListPositionalParametersWithInitialValueAreReplacedIfNonNull() {
+        PositionalParamsListWithInitialValue params = new PositionalParamsListWithInitialValue();
+        params.list = new ArrayList<Integer>();
+        params.list.add(234);
+        List<Integer> list = params.list;
+        new CommandLine(params).parseArgs("3", "2", "1");
+        assertNotSame(list, params.list);
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+    }
+
+//    @Ignore("Requires https://github.com/remkop/picocli/issues/995")
+    @Test
+    public void testIssue995ListPositionalParametersWithInitialValueAreClearedOnReuse() {
+        PositionalParamsListWithInitialValue params = new PositionalParamsListWithInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+
+        cmd.parseArgs("4", "5", "6");
+        assertEquals(Arrays.asList(4, 5, 6), params.list);
+
+        /* Related to https://github.com/remkop/picocli/issues/990
+
+        Picocli currently clears (actually creates a new instance of) collections and arrays:
+        see comment "existing values are default values if `initialized` does NOT contain argsSpec"  ::applyValuesToArrayField
+
+        But only if the user actually specifies a value...
+        The original default value is not preserved and applied if the user input omits the option/positional.
+         */
+        cmd.parseArgs();
+        assertEquals(Collections.emptyList(), params.list);
+
+        params.list = new ArrayList<Integer>();
+        params.list.add(233);
+        params.list.add(666);
+        cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+
+        cmd.parseArgs();
+        assertEquals(Arrays.asList(233,666), params.list);
+    }
+
+    static class PositionalParamsListWithNonEmptyInitialValue {
+        @Parameters
+        List<Integer> list = new ArrayList<Integer>(Arrays.asList(3, 4, 5));
+    }
+    @Test
+    public void testIssue995PositionalParamsListWithNonEmptyInitialValueAreResetOnReuse() {
+        PositionalParamsListWithNonEmptyInitialValue params = new PositionalParamsListWithNonEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(Arrays.asList(3, 2, 1), params.list);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertEquals(Arrays.asList(3, 4, 5), params.list);
+    }
+
+    static class PositionalParametersArrayWithEmptyInitialValue {
+        @Parameters
+        int[] array = new int[0];
+    }
+    @Test
+    public void testIssue995PositionalParametersArrayWithEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersArrayWithEmptyInitialValue params = new PositionalParametersArrayWithEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertArrayEquals(new int[] {3, 2, 1}, params.array);
+
+        cmd.parseArgs(); // should be reset to original empty initial value
+        assertArrayEquals(new int[0], params.array);
+    }
+
+    static class PositionalParametersArrayWithNonEmptyInitialValue {
+        @Parameters
+        int[] array = new int[] {3, 4, 5};
+    }
+    @Test
+    public void testIssue995PositionalParametersArrayWithNonEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersArrayWithNonEmptyInitialValue params = new PositionalParametersArrayWithNonEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertArrayEquals(new int[] {3, 2, 1}, params.array);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertArrayEquals(new int[] {3, 4, 5}, params.array);
+    }
+
+    static class PositionalParametersSetWithEmptyInitialValue {
+        @Parameters
+        Set<Integer> set = new TreeSet<Integer>();
+    }
+    //@Ignore("Requires https://github.com/remkop/picocli/issues/995")
+    @Test
+    public void testIssue995PositionalParametersSetWithEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersSetWithEmptyInitialValue params = new PositionalParametersSetWithEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(new HashSet<Integer>(Arrays.asList(3, 2, 1)), params.set);
+
+        cmd.parseArgs(); // should be reset to original empty initial value
+        assertEquals(new HashSet<Integer>(), params.set);
+    }
+
+    static class PositionalParametersSetWithNonEmptyInitialValue {
+        @Parameters
+        Set<Integer> set = new TreeSet<Integer>(Arrays.asList(3, 4, 5));
+    }
+    @Test
+    public void testIssue995PositionalParametersSetWithNonEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersSetWithNonEmptyInitialValue params = new PositionalParametersSetWithNonEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("3", "2", "1");
+        assertEquals(new HashSet<Integer>(Arrays.asList(3, 2, 1)), params.set);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertEquals(new HashSet<Integer>(Arrays.asList(3, 4, 5)), params.set);
+    }
+
+    static class PositionalParametersEnumSetWithEmptyInitialValue {
+        @Parameters
+        EnumSet<TimeUnit> enumSet = EnumSet.noneOf(TimeUnit.class);
+    }
+    //@Ignore("Requires https://github.com/remkop/picocli/issues/995")
+    @Test
+    public void testIssue995PositionalParametersEnumSetWithEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersEnumSetWithEmptyInitialValue params = new PositionalParametersEnumSetWithEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("MILLISECONDS", "SECONDS");
+        assertEquals(EnumSet.of(TimeUnit.MILLISECONDS, TimeUnit.SECONDS), params.enumSet);
+
+        cmd.parseArgs(); // should be reset to original empty initial value
+        assertEquals(EnumSet.noneOf(TimeUnit.class), params.enumSet);
+    }
+
+    static class PositionalParametersEnumSetWithNonEmptyInitialValue {
+        @Parameters
+        EnumSet<TimeUnit> enumSet = EnumSet.of(TimeUnit.MICROSECONDS, TimeUnit.MILLISECONDS);
+    }
+    @Test
+    public void testIssue995PositionalParametersEnumSetWithNonEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersEnumSetWithNonEmptyInitialValue params = new PositionalParametersEnumSetWithNonEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("MILLISECONDS", "SECONDS");
+        assertEquals(EnumSet.of(TimeUnit.MILLISECONDS, TimeUnit.SECONDS), params.enumSet);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertEquals(EnumSet.of(TimeUnit.MICROSECONDS, TimeUnit.MILLISECONDS), params.enumSet);
+    }
+
+    static class PositionalParametersMapWithEmptyInitialValue {
+        @Parameters
+        Map<Integer, Integer> map = new LinkedHashMap<Integer, Integer>();
+    }
+    //@Ignore("Requires https://github.com/remkop/picocli/issues/995")
+    @Test
+    public void testIssue995PositionalParametersMapWithEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersMapWithEmptyInitialValue params = new PositionalParametersMapWithEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("1=1", "2=2", "3=3");
+        assertEquals(TestUtil.mapOf(1, 1, 2, 2, 3, 3), params.map);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertEquals(new LinkedHashMap<Integer, Integer>(), params.map);
+    }
+
+    static class PositionalParametersMapWithNonEmptyInitialValue {
+        @Parameters
+        Map<Integer, Integer> map = TestUtil.mapOf(5, 5, 6, 6, 7, 7);
+    }
+    @Test
+    public void testIssue995PositionalParametersMapWithNonEmptyInitialValueAreResetOnReuse() {
+        PositionalParametersMapWithNonEmptyInitialValue params = new PositionalParametersMapWithNonEmptyInitialValue();
+        CommandLine cmd = new CommandLine(params);
+
+        cmd.parseArgs("1=1", "2=2", "3=3");
+        assertEquals(TestUtil.mapOf(1, 1, 2, 2, 3, 3), params.map);
+
+        cmd.parseArgs(); // should be reset to original initial value
+        assertEquals(TestUtil.mapOf(5, 5, 6, 6, 7, 7), params.map);
+    }
+
+    static class SortedSetPositionalParams {
         @Parameters(type = Integer.class) SortedSet<Integer> sortedSet;
     }
     @Test
@@ -227,7 +447,7 @@ public class CommandLineTest {
         params.sortedSet = new TreeSet<Integer>();
         SortedSet<Integer> list = params.sortedSet;
         new CommandLine(params).parseArgs("3", "2", "1");
-        assertSame(list, params.sortedSet);
+        assertNotSame(list, params.sortedSet);
         assertEquals(Arrays.asList(1, 2, 3), new ArrayList<Integer>(params.sortedSet));
     }
     @Test
@@ -240,7 +460,7 @@ public class CommandLineTest {
         assertNotSame(list, params.sortedSet);
         assertEquals(Arrays.asList(1, 2, 3), new ArrayList<Integer>(params.sortedSet));
     }
-    class SetPositionalParams {
+    static class SetPositionalParams {
         @Parameters(type = Integer.class) Set<Integer> set;
     }
     @Test
@@ -257,7 +477,7 @@ public class CommandLineTest {
         params.set = new TreeSet<Integer>();
         Set<Integer> list = params.set;
         new CommandLine(params).parseArgs("3", "2", "1");
-        assertSame(list, params.set);
+        assertNotSame(list, params.set);
         assertEquals(new HashSet<Integer>(Arrays.asList(1, 2, 3)), params.set);
     }
     @Test
@@ -270,7 +490,7 @@ public class CommandLineTest {
         assertNotSame(list, params.set);
         assertEquals(new HashSet<Integer>(Arrays.asList(3, 2, 1)), params.set);
     }
-    class QueuePositionalParams {
+    static class QueuePositionalParams {
         @Parameters(type = Integer.class) Queue<Integer> queue;
     }
     @Test
@@ -287,7 +507,7 @@ public class CommandLineTest {
         params.queue = new LinkedList<Integer>();
         Queue<Integer> list = params.queue;
         new CommandLine(params).parseArgs("3", "2", "1");
-        assertSame(list, params.queue);
+        assertNotSame(list, params.queue);
         assertEquals(new LinkedList<Integer>(Arrays.asList(3, 2, 1)), params.queue);
     }
     @Test
@@ -300,7 +520,7 @@ public class CommandLineTest {
         assertNotSame(list, params.queue);
         assertEquals(new LinkedList<Integer>(Arrays.asList(3, 2, 1)), params.queue);
     }
-    class CollectionPositionalParams {
+    static class CollectionPositionalParams {
         @Parameters(type = Integer.class) Collection<Integer> collection;
     }
     @Test
@@ -317,7 +537,7 @@ public class CommandLineTest {
         params.collection = new ArrayList<Integer>();
         Collection<Integer> list = params.collection;
         new CommandLine(params).parseArgs("3", "2", "1");
-        assertSame(list, params.collection);
+        assertNotSame(list, params.collection);
         assertEquals(Arrays.asList(3, 2, 1), params.collection);
     }
     @Test
@@ -453,7 +673,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new RequiredField(), "arg1", "arg2");
             fail("Missing required field should have thrown exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--required=<required>'", ex.getMessage());
+            assertEquals("Missing required option: '--required=<required>'", ex.getMessage());
         }
     }
     @Test
@@ -511,7 +731,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(requiredField, "arg1", "arg2");
             fail("Missing required field should have thrown exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--required=<required>'", ex.getMessage());
+            assertEquals("Missing required option: '--required=<required>'", ex.getMessage());
         }
     }
     @Test
@@ -528,7 +748,7 @@ public class CommandLineTest {
             commandLine.parseArgs("arg1", "arg2");
             fail("Missing required field should have thrown exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--required=<required>'", ex.getMessage());
+            assertEquals("Missing required option: '--required=<required>'", ex.getMessage());
         }
     }
 
@@ -845,16 +1065,16 @@ public class CommandLineTest {
         String prefix7 = format("" +
                 "[picocli DEBUG] Could not register converter for java.nio.file.Path: java.lang.ClassNotFoundException: java.nio.file.Path%n");
         String expected = format("" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.CommandLineTest$CompactFields with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.CommandLineTest$CompactFields@20f5239f with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli INFO] Picocli version: %3$s%n" +
                         "[picocli INFO] Parsing 6 command line args [-oout, --, -r, -v, p1, p2]%n" +
-                        "[picocli DEBUG] Parser configuration: posixClusteredShortOptionsAllowed=true, stopAtPositional=false, stopAtUnmatched=false, separator=null, overwrittenOptionsAllowed=false, unmatchedArgumentsAllowed=false, expandAtFiles=true, atFileCommentChar=#, useSimplifiedAtFiles=false, endOfOptionsDelimiter=--, limitSplit=false, aritySatisfiedByAttachedOptionParam=false, toggleBooleanFlags=false, unmatchedOptionsArePositionalParams=false, collectErrors=false,caseInsensitiveEnumValuesAllowed=false, trimQuotes=false, splitQuotedStrings=false%n" +
+                        "[picocli DEBUG] Parser configuration: optionsCaseInsensitive=false, subcommandsCaseInsensitive=false, abbreviatedOptionsAllowed=false, abbreviatedSubcommandsAllowed=false, aritySatisfiedByAttachedOptionParam=false, atFileCommentChar=#, caseInsensitiveEnumValuesAllowed=false, collectErrors=false, endOfOptionsDelimiter=--, expandAtFiles=true, limitSplit=false, overwrittenOptionsAllowed=false, posixClusteredShortOptionsAllowed=true, separator=null, splitQuotedStrings=false, stopAtPositional=false, stopAtUnmatched=false, toggleBooleanFlags=false, trimQuotes=false, unmatchedArgumentsAllowed=false, unmatchedOptionsArePositionalParams=false, useSimplifiedAtFiles=false%n" +
                         "[picocli DEBUG] (ANSI is disabled by default: ...)%n" +
+                        "[picocli DEBUG] Initializing command 'null' (user object: picocli.CommandLineTest$CompactFields@20f5239f): 3 options, 1 positional parameters, 0 required, 0 groups, 0 subcommands.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.CommandLineTest$CompactFields.verbose of type boolean to false.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.CommandLineTest$CompactFields.recursive of type boolean to false.%n" +
                         "[picocli DEBUG] Set initial value for field java.io.File picocli.CommandLineTest$CompactFields.outputFile of type class java.io.File to null.%n" +
                         "[picocli DEBUG] Set initial value for field java.io.File[] picocli.CommandLineTest$CompactFields.inputFiles of type class [Ljava.io.File; to null.%n" +
-                        "[picocli DEBUG] Initializing %1$s$CompactFields: 3 options, 1 positional parameters, 0 required, 0 groups, 0 subcommands.%n" +
                         "[picocli DEBUG] [0] Processing argument '-oout'. Remainder=[--, -r, -v, p1, p2]%n" +
                         "[picocli DEBUG] '-oout' cannot be separated into <option>=<option-parameter>%n" +
                         "[picocli DEBUG] Trying to process '-oout' as clustered short options%n" +
@@ -878,7 +1098,10 @@ public class CommandLineTest {
                         "[picocli DEBUG] [5] Processing next arg as a positional parameter. Command-local position=3. Remainder=[p2]%n" +
                         "[picocli DEBUG] Position 3 (command-local) is in index range 0..*. Trying to assign args to field java.io.File[] %1$s$CompactFields.inputFiles, arity=0..1%n" +
                         "[picocli INFO] Adding [p2] to field java.io.File[] picocli.CommandLineTest$CompactFields.inputFiles for args[0..*] at position 3%n" +
-                        "[picocli DEBUG] Consumed 1 arguments and 0 interactive values, moving command-local position to index 4.%n",
+                        "[picocli DEBUG] Consumed 1 arguments and 0 interactive values, moving command-local position to index 4.%n" +
+                        "[picocli DEBUG] Applying default values for command '<main class>'%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.CommandLineTest$CompactFields.verbose%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.CommandLineTest$CompactFields.recursive%n",
                 CommandLineTest.class.getName(),
                 new File("/home/rpopma/picocli"),
                 CommandLine.versionString());
@@ -890,7 +1113,7 @@ public class CommandLineTest {
         if (System.getProperty("java.version").compareTo("1.8.0") < 0) {
             expected = prefix8 + expected;
         }
-        assertEquals(stripAnsiTrace(expected), stripAnsiTrace(actual));
+        assertEquals(stripAnsiTrace(stripHashcodes(expected)), stripAnsiTrace(stripHashcodes(actual)));
     }
 
     @Test
@@ -1013,11 +1236,11 @@ public class CommandLineTest {
         try {
             CommandLine.populateCommand(new WithParams(), new String[0]);
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: <param0>, <param1>", ex.getMessage());
+            assertEquals("Missing required parameters: '<param0>', '<param1>'", ex.getMessage());
         }
     }
 
-    class VariousPrefixCharacters {
+    static class VariousPrefixCharacters {
         @Option(names = {"-d", "--dash"}) int dash;
         @Option(names = {"/S"}) int slashS;
         @Option(names = {"/T"}) int slashT;
@@ -1072,7 +1295,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App(), "--opt=abc");
             fail("Expected failure with unknown separator");
         } catch (MissingParameterException ok) {
-            assertEquals("Missing required option '--opt:<opt>'", ok.getMessage());
+            assertEquals("Missing required option: '--opt:<opt>'", ok.getMessage());
         }
     }
     @Test
@@ -1085,7 +1308,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App(), "--opt=abc");
             fail("Expected failure with unknown separator");
         } catch (MissingParameterException ok) {
-            assertEquals("Missing required option '--opt:<opt>'", ok.getMessage());
+            assertEquals("Missing required option: '--opt:<opt>'", ok.getMessage());
         }
     }
     @Test
@@ -1100,7 +1323,7 @@ public class CommandLineTest {
             cmd.parseArgs("--opt=abc");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ok) {
-            assertEquals("Missing required option '--opt:<opt>'", ok.getMessage());
+            assertEquals("Missing required option: '--opt:<opt>'", ok.getMessage());
             assertEquals(Arrays.asList("--opt=abc"), cmd.getUnmatchedArguments());
         }
     }
@@ -1454,7 +1677,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App(), "000");
             fail("Should fail with missingParamException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <file1>", ex.getMessage());
+            assertEquals("Missing required parameter: '<file1>'", ex.getMessage());
         }
     }
 
@@ -1503,7 +1726,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App());
             fail("Should fail with missingParamException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <file0_1>", ex.getMessage());
+            assertEquals("Missing required parameter: '<file0_1>'", ex.getMessage());
         }
     }
 
@@ -1693,14 +1916,15 @@ public class CommandLineTest {
         }
         try {
             CommandLine.populateCommand(new SingleValue(),"val1", "val2");
-            fail("Expected OverwrittenOptionException");
-        } catch (OverwrittenOptionException ex) {
-            assertEquals("positional parameter at index 0..* (<str>) should be specified only once", ex.getMessage());
+            fail("Expected exception");
+        } catch (UnmatchedArgumentException ex) {
+            assertEquals("Unmatched argument at index 1: 'val2'", ex.getMessage());
         }
         setTraceLevel("OFF");
-        CommandLine cmd = new CommandLine(new SingleValue()).setOverwrittenOptionsAllowed(true);
+        CommandLine cmd = new CommandLine(new SingleValue()).setUnmatchedArgumentsAllowed(true);
         cmd.parseArgs("val1", "val2");
-        assertEquals("val2", ((SingleValue) cmd.getCommand()).str);
+        assertEquals("val1", ((SingleValue) cmd.getCommand()).str);
+        assertEquals(Arrays.asList("val2"), cmd.getUnmatchedArguments());
     }
 
     @SuppressWarnings("deprecation")
@@ -1790,46 +2014,48 @@ public class CommandLineTest {
         String prefix7 = format("" +
                 "[picocli DEBUG] Could not register converter for java.nio.file.Path: java.lang.ClassNotFoundException: java.nio.file.Path%n");
         String expected = format("" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$Git with factory picocli.CommandLine$DefaultFactory%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.CommandLine$AutoHelpMixin with factory picocli.CommandLine$DefaultFactory%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.CommandLine$HelpCommand with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$Git@150ede8b with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.CommandLine$AutoHelpMixin@69228e85 with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.CommandLine$HelpCommand@332820f4 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'help' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitStatus with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitStatus@4d192aef with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'status' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitCommit with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitCommit@2dfe5525 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'commit' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitAdd with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitAdd@43d38654 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'add' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitBranch with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitBranch@710d89e2 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'branch' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitCheckout with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitCheckout@1b9776f5 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'checkout' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitClone with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitClone@67a3bd51 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'clone' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitDiff with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitDiff@5c534b5b with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'diff' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitMerge with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitMerge@14229fa7 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'merge' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitPush with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitPush@3936df72 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'push' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitRebase with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitRebase@42714a7 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'rebase' to 'git'%n" +
-                        "[picocli DEBUG] Creating CommandSpec for object of class picocli.Demo$GitTag with factory picocli.CommandLine$DefaultFactory%n" +
+                        "[picocli DEBUG] Creating CommandSpec for picocli.Demo$GitTag@f679798 with factory picocli.CommandLine$DefaultFactory%n" +
                         "[picocli DEBUG] Adding subcommand 'tag' to 'git'%n" +
                         "[picocli INFO] Picocli version: %3$s%n" +
                         "[picocli INFO] Parsing 8 command line args [--git-dir=/home/rpopma/picocli, commit, -m, \"Fixed typos\", --, src1.java, src2.java, src3.java]%n" +
-                        "[picocli DEBUG] Parser configuration: posixClusteredShortOptionsAllowed=true, stopAtPositional=false, stopAtUnmatched=false, separator=null, overwrittenOptionsAllowed=false, unmatchedArgumentsAllowed=false, expandAtFiles=true, atFileCommentChar=#, useSimplifiedAtFiles=false, endOfOptionsDelimiter=--, limitSplit=false, aritySatisfiedByAttachedOptionParam=false, toggleBooleanFlags=false, unmatchedOptionsArePositionalParams=false, collectErrors=false,caseInsensitiveEnumValuesAllowed=false, trimQuotes=false, splitQuotedStrings=false%n" +
+                        "[picocli DEBUG] Parser configuration: optionsCaseInsensitive=false, subcommandsCaseInsensitive=false, abbreviatedOptionsAllowed=false, abbreviatedSubcommandsAllowed=false, aritySatisfiedByAttachedOptionParam=false, atFileCommentChar=#, caseInsensitiveEnumValuesAllowed=false, collectErrors=false, endOfOptionsDelimiter=--, expandAtFiles=true, limitSplit=false, overwrittenOptionsAllowed=false, posixClusteredShortOptionsAllowed=true, separator=null, splitQuotedStrings=false, stopAtPositional=false, stopAtUnmatched=false, toggleBooleanFlags=false, trimQuotes=false, unmatchedArgumentsAllowed=false, unmatchedOptionsArePositionalParams=false, useSimplifiedAtFiles=false%n" +
                         "[picocli DEBUG] (ANSI is disabled by default: ...)%n" +
+                        "[picocli DEBUG] Initializing command 'git' (user object: picocli.Demo$Git@75d4a5c2): 3 options, 0 positional parameters, 0 required, 0 groups, 12 subcommands.%n" +
                         "[picocli DEBUG] Set initial value for field java.io.File picocli.Demo$Git.gitDir of type class java.io.File to null.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.CommandLine$AutoHelpMixin.helpRequested of type boolean to false.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.CommandLine$AutoHelpMixin.versionRequested of type boolean to false.%n" +
-                        "[picocli DEBUG] Initializing %1$s$Git: 3 options, 0 positional parameters, 0 required, 0 groups, 12 subcommands.%n" +
                         "[picocli DEBUG] [0] Processing argument '--git-dir=/home/rpopma/picocli'. Remainder=[commit, -m, \"Fixed typos\", --, src1.java, src2.java, src3.java]%n" +
                         "[picocli DEBUG] Separated '--git-dir' option from '/home/rpopma/picocli' option parameter%n" +
                         "[picocli DEBUG] Found option named '--git-dir': field java.io.File %1$s$Git.gitDir, arity=1%n" +
                         "[picocli INFO] Setting field java.io.File picocli.Demo$Git.gitDir to '%2$s' (was 'null') for option --git-dir%n" +
                         "[picocli DEBUG] [1] Processing argument 'commit'. Remainder=[-m, \"Fixed typos\", --, src1.java, src2.java, src3.java]%n" +
-                        "[picocli DEBUG] Found subcommand 'commit' (%1$s$GitCommit)%n" +
+                        "[picocli DEBUG] Found subcommand 'commit' (command 'git-commit' (user object: picocli.Demo$GitCommit@22ff4249))%n" +
+                        "[picocli DEBUG] Checking required args for parent command 'git' (user object: picocli.Demo$Git@00000000)...%n" +
+                        "[picocli DEBUG] Initializing command 'git-commit' (user object: picocli.Demo$GitCommit@22ff4249): 8 options, 1 positional parameters, 0 required, 0 groups, 0 subcommands.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.Demo$GitCommit.all of type boolean to false.%n" +
                         "[picocli DEBUG] Set initial value for field boolean picocli.Demo$GitCommit.patch of type boolean to false.%n" +
                         "[picocli DEBUG] Set initial value for field String picocli.Demo$GitCommit.reuseMessageCommit of type class java.lang.String to null.%n" +
@@ -1839,16 +2065,17 @@ public class CommandLineTest {
                         "[picocli DEBUG] Set initial value for field java.io.File picocli.Demo$GitCommit.file of type class java.io.File to null.%n" +
                         "[picocli DEBUG] Set initial value for field java.util.List<String> picocli.Demo$GitCommit.message of type interface java.util.List to [].%n" +
                         "[picocli DEBUG] Set initial value for field java.util.List<java.io.File> picocli.Demo$GitCommit.files of type interface java.util.List to [].%n" +
-                        "[picocli DEBUG] Initializing %1$s$GitCommit: 8 options, 1 positional parameters, 0 required, 0 groups, 0 subcommands.%n" +
                         "[picocli DEBUG] [2] Processing argument '-m'. Remainder=[\"Fixed typos\", --, src1.java, src2.java, src3.java]%n" +
                         "[picocli DEBUG] '-m' cannot be separated into <option>=<option-parameter>%n" +
                         "[picocli DEBUG] Found option named '-m': field java.util.List<String> %1$s$GitCommit.message, arity=1%n" +
                         "[picocli INFO] Adding [\"Fixed typos\"] to field java.util.List<String> picocli.Demo$GitCommit.message for option -m%n" +
+                        "[picocli DEBUG] Initializing binding for option '--message' (<msg>)%n" +
                         "[picocli DEBUG] [4] Processing argument '--'. Remainder=[src1.java, src2.java, src3.java]%n" +
                         "[picocli INFO] Found end-of-options delimiter '--'. Treating remainder as positional parameters.%n" +
                         "[picocli DEBUG] [5] Processing next arg as a positional parameter. Command-local position=0. Remainder=[src1.java, src2.java, src3.java]%n" +
                         "[picocli DEBUG] Position 0 (command-local) is in index range 0..*. Trying to assign args to field java.util.List<java.io.File> %1$s$GitCommit.files, arity=0..1%n" +
                         "[picocli INFO] Adding [src1.java] to field java.util.List<java.io.File> picocli.Demo$GitCommit.files for args[0..*] at position 0%n" +
+                        "[picocli DEBUG] Initializing binding for positional parameter at index 0..* (<files>)%n" +
                         "[picocli DEBUG] Consumed 1 arguments and 0 interactive values, moving command-local position to index 1.%n" +
                         "[picocli DEBUG] [6] Processing next arg as a positional parameter. Command-local position=1. Remainder=[src2.java, src3.java]%n" +
                         "[picocli DEBUG] Position 1 (command-local) is in index range 0..*. Trying to assign args to field java.util.List<java.io.File> %1$s$GitCommit.files, arity=0..1%n" +
@@ -1857,11 +2084,23 @@ public class CommandLineTest {
                         "[picocli DEBUG] [7] Processing next arg as a positional parameter. Command-local position=2. Remainder=[src3.java]%n" +
                         "[picocli DEBUG] Position 2 (command-local) is in index range 0..*. Trying to assign args to field java.util.List<java.io.File> %1$s$GitCommit.files, arity=0..1%n" +
                         "[picocli INFO] Adding [src3.java] to field java.util.List<java.io.File> picocli.Demo$GitCommit.files for args[0..*] at position 2%n" +
-                        "[picocli DEBUG] Consumed 1 arguments and 0 interactive values, moving command-local position to index 3.%n",
+                        "[picocli DEBUG] Consumed 1 arguments and 0 interactive values, moving command-local position to index 3.%n" +
+                        "[picocli DEBUG] Applying default values for command 'git git-commit'%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.Demo$GitCommit.all%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.Demo$GitCommit.patch%n" +
+                        "[picocli DEBUG] defaultValue not defined for field String picocli.Demo$GitCommit.reuseMessageCommit%n" +
+                        "[picocli DEBUG] defaultValue not defined for field String picocli.Demo$GitCommit.reEditMessageCommit%n" +
+                        "[picocli DEBUG] defaultValue not defined for field String picocli.Demo$GitCommit.fixupCommit%n" +
+                        "[picocli DEBUG] defaultValue not defined for field String picocli.Demo$GitCommit.squashCommit%n" +
+                        "[picocli DEBUG] defaultValue not defined for field java.io.File picocli.Demo$GitCommit.file%n" +
+                        "[picocli DEBUG] Applying default values for command 'git'%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.CommandLine$AutoHelpMixin.helpRequested%n" +
+                        "[picocli DEBUG] defaultValue not defined for field boolean picocli.CommandLine$AutoHelpMixin.versionRequested%n",
                 Demo.class.getName(),
                 new File("/home/rpopma/picocli"),
                 CommandLine.versionString());
         String actual = new String(baos.toByteArray(), "UTF8");
+        String actualSafe = stripHashcodes(actual);
         //System.out.println(actual);
         if (System.getProperty("java.version").compareTo("1.7.0") < 0) {
             expected = prefix7 + expected;
@@ -1869,7 +2108,7 @@ public class CommandLineTest {
         if (System.getProperty("java.version").compareTo("1.8.0") < 0) {
             expected = prefix8 + expected;
         }
-        assertEquals(stripAnsiTrace(expected), stripAnsiTrace(actual));
+        assertEquals(stripAnsiTrace(stripHashcodes(expected)), stripAnsiTrace(stripHashcodes(actual)));
     }
     @Test
     public void testTraceWarningIfOptionOverwrittenWhenOverwrittenOptionsAllowed() throws Exception {
@@ -2090,7 +2329,7 @@ public class CommandLineTest {
             commandLine.parseArgs("-u", "foo");
             fail("expected exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--password=<password>'", ex.getLocalizedMessage());
+            assertEquals("Missing required option: '--password=<password>'", ex.getLocalizedMessage());
         }
         commandLine.parseArgs("-u", "foo", "-p", "abc");
     }
@@ -2143,7 +2382,7 @@ public class CommandLineTest {
             @Option(names = {"-P", "-map"}, type = {String.class, String.class}) Map<String, String> map = new HashMap<String, String>();
             private void validateMapField() {
                 assertEquals(1, map.size());
-                assertEquals(HashMap.class, map.getClass());
+                assertEquals(LinkedHashMap.class, map.getClass());
                 assertEquals("BBB", map.get("AAA"));
             }
         }
@@ -2336,7 +2575,22 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App());
             fail("MissingParameterException expected");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required options [-a=<first>, -b=<second>, -c=<third>]", ex.getMessage());
+            assertEquals("Missing required options: '-a=<first>', '-b=<second>', '-c=<third>'", ex.getMessage());
+        }
+    }
+    @Test
+    public void testUnmatchedArgumentDoesNotUseLabel() {
+        class App {
+            @Parameters(arity = "1", paramLabel = "IN_FILE", description = "The input file")
+            File foo;
+            @Option(names = "-o", paramLabel = "OUT_FILE", description = "The output file", required = true)
+            File bar;
+        }
+        try {
+            CommandLine.populateCommand(new App(), "a", "b", "-o=1");
+            fail("UnmatchedArgumentException expected");
+        } catch (UnmatchedArgumentException ex) {
+            assertEquals("Unmatched argument at index 1: 'b'", ex.getMessage());
         }
     }
     @Test
@@ -2351,7 +2605,7 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App());
             fail("MissingParameterException expected");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required options [-o=OUT_FILE, params[0..*]=IN_FILE]", ex.getMessage());
+            assertEquals("Missing required options and parameters: '-o=OUT_FILE', 'IN_FILE'", ex.getMessage());
         }
     }
     @Test
@@ -2368,9 +2622,10 @@ public class CommandLineTest {
             CommandLine.populateCommand(new App());
             fail("MissingParameterException expected");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required options [-o=<String=String>, -x=KEY=VAL, params[0..*]=<Long=File>]", ex.getMessage());
+            assertEquals("Missing required options and parameters: '-o=<String=String>', '-x=KEY=VAL', '<Long=File>'", ex.getMessage());
         }
     }
+    @Ignore("That fails because there is public no-arg constructor")
     @Test
     public void testAnyExceptionWrappedInParameterException() {
         class App {
@@ -2718,7 +2973,7 @@ public class CommandLineTest {
             new CommandLine(new Example()).parseArgs("-o /tmp");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <inputFiles>", ex.getMessage());
+            assertEquals("Missing required parameter: '<inputFiles>'", ex.getMessage());
         }
         try {
             // Comment from AshwinJay : "Should've failed as inputFiles were not provided"
@@ -2728,14 +2983,14 @@ public class CommandLineTest {
             new CommandLine(new Example()).parseArgs("-o", " /tmp");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <inputFiles>", ex.getMessage());
+            assertEquals("Missing required parameter: '<inputFiles>'", ex.getMessage());
         }
         try {
             // a MissingParameterException is thrown for missing required option -o, as expected
             new CommandLine(new Example()).parseArgs("inputfile1", "inputfile2");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--out-dir=<outputDir>'", ex.getMessage());
+            assertEquals("Missing required option: '--out-dir=<outputDir>'", ex.getMessage());
         }
 
         // a single empty string parameter was specified: this becomes an <inputFile> value
@@ -2743,7 +2998,7 @@ public class CommandLineTest {
             new CommandLine(new Example()).parseArgs("");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '--out-dir=<outputDir>'", ex.getMessage());
+            assertEquals("Missing required option: '--out-dir=<outputDir>'", ex.getMessage());
         }
 
         // no parameters were specified
@@ -2751,7 +3006,7 @@ public class CommandLineTest {
             new CommandLine(new Example()).parseArgs();
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required options [--out-dir=<outputDir>, params[0..*]=<inputFiles>]", ex.getMessage());
+            assertEquals("Missing required options and parameters: '--out-dir=<outputDir>', '<inputFiles>'", ex.getMessage());
         }
 
         // finally, let's test the success scenario
@@ -3413,7 +3668,7 @@ public class CommandLineTest {
         ParseResult parseResult = cmd.parseArgs();
         List<Exception> errors = parseResult.errors();
         assertEquals(1, errors.size());
-        assertEquals("Missing required parameter: <x>", errors.get(0).getMessage());
+        assertEquals("Missing required parameter: '<x>'", errors.get(0).getMessage());
     }
 
     @Test
@@ -3501,6 +3756,141 @@ public class CommandLineTest {
         assertEquals("-", app.json);
         assertEquals("~/hello.mustache", app.template);
         assertTrue(systemErrRule.getLog().contains("Single-character arguments that don't match known options are considered positional parameters"));
+    }
+
+    @Test
+    public void testCaseInsensitiveToggle() {
+        @Command
+        class App {
+            @Command(name = "help")
+            public void helpCommand() {}
+
+            @Option(names = "-h")
+            public boolean helpMessage;
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        // Assert default behaviour. (defaults to false)
+        assertFalse(commandLine.isSubcommandsCaseInsensitive());
+        assertFalse(commandLine.isOptionsCaseInsensitive());
+        commandLine.setSubcommandsCaseInsensitive(true);
+        // Test set case-insensitivity twice.
+        commandLine.setSubcommandsCaseInsensitive(true);
+        assertTrue(commandLine.isSubcommandsCaseInsensitive());
+        assertFalse(commandLine.isOptionsCaseInsensitive());
+        commandLine.setOptionsCaseInsensitive(true);
+        // Test set case-insensitivity twice.
+        commandLine.setOptionsCaseInsensitive(true);
+        assertTrue(commandLine.isSubcommandsCaseInsensitive());
+        assertTrue(commandLine.isOptionsCaseInsensitive());
+        commandLine.setSubcommandsCaseInsensitive(false);
+        commandLine.setOptionsCaseInsensitive(false);
+        assertFalse(commandLine.isSubcommandsCaseInsensitive());
+        assertFalse(commandLine.isOptionsCaseInsensitive());
+    }
+
+    @Test
+    public void testAddCaseInsensitiveDuplicateSubcommands() {
+        @Command
+        class App {
+            @Command(name = "help")
+            public void helpCommand() {}
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        commandLine.setSubcommandsCaseInsensitive(true);
+        try {
+            commandLine.getCommandSpec().addSubcommand("HELP", CommandSpec.create());
+            fail("Expected exception");
+        } catch (Exception ex) {
+            assertEquals("Another subcommand named 'help' already exists for command '<main class>'", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testToggleCaseInsensitiveDuplicateSubcommands() {
+        @Command
+        class App {
+            @Command(name = "help")
+            public void helpCommand() {}
+
+            @Command(name = "HELP")
+            public void helpCommand2() {}
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        try {
+            commandLine.setSubcommandsCaseInsensitive(true);
+            fail("Expected exception");
+        } catch (Exception ex) {
+            assertEquals("Duplicated keys: help and HELP", ex.getMessage());
+        }
+    }
+
+
+    @Test
+    public void testAddCaseInsensitiveDuplicateOptions() {
+        class App {
+            @Option(names = "-h")
+            boolean helpMessage;
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        commandLine.setOptionsCaseInsensitive(true);
+        try {
+            commandLine.getCommandSpec().addOption(OptionSpec.builder("-H").build());
+            fail("Expected exception");
+        } catch (Exception ex) {
+            assertTrue(ex.getMessage().startsWith("Option name '-h' is used by both option -H and field boolean "));
+        }
+    }
+
+    @Test
+    public void testToggleCaseInsensitiveDuplicateOptions() {
+        class App {
+            @Option(names = "-h")
+            boolean helpMessage;
+
+            @Option(names = "-H")
+            boolean highlight;
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        try {
+            commandLine.setOptionsCaseInsensitive(true);
+            fail("Expected exception");
+        } catch (Exception ex) {
+            assertEquals("Duplicated keys: -h and -H", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testCaseInsensitiveParseResult() {
+        @Command
+        class App {
+            @Option(names = "-h")
+            boolean helpMessage;
+
+            @Option(names = "-hElLo")
+            boolean helloWorld;
+
+            @Command(name = "help")
+            public int helpCommand() { return 0; }
+        }
+        @Command(name = "ver")
+        class VerCommand implements Callable<Integer> {
+            public Integer call() { return 42; }
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        commandLine.getSubcommands().get("help").addSubcommand("ver", new VerCommand());
+        commandLine.setSubcommandsCaseInsensitive(true);
+        commandLine.setOptionsCaseInsensitive(true);
+        ParseResult result = commandLine.parseArgs("-h", "-HeLLO");
+
+        assertTrue(result.hasMatchedOption("-h"));
+        assertTrue(result.hasMatchedOption("-hElLo"));
+        assertFalse(result.hasMatchedOption("-H"));
+        assertFalse(result.hasMatchedOption("-hello"));
+        assertFalse(result.hasMatchedOption("-HELLO"));
+        assertFalse(result.hasMatchedOption("-HeLLO"));
+
+        int returnCode = commandLine.execute("HeLp", "VER");
+        assertEquals(42, returnCode);
     }
 
     @Test

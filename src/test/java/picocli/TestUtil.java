@@ -25,6 +25,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -146,6 +148,46 @@ public class TestUtil {
         return result;
     }
 
+    public static <K, V> Map<K, V> mapOf(K k1, V v1) {
+        Map<K, V> result = new LinkedHashMap<K, V>();
+        result.put(k1, v1);
+        return result;
+    }
+
+    public static <K, V> Map<K, V> mapOf(K k1, V v1, K k2, V v2) {
+        Map<K, V> result = new LinkedHashMap<K, V>();
+        result.put(k1, v1);
+        result.put(k2, v2);
+        return result;
+    }
+
+    public static <K, V> Map<K, V> mapOf(K k1, V v1, K k2, V v2, K k3, V v3) {
+        Map<K, V> result = new LinkedHashMap<K, V>();
+        result.put(k1, v1);
+        result.put(k2, v2);
+        result.put(k3, v3);
+        return result;
+    }
+
+    public static <K, V> Map<K, V> mapOf(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4) {
+        Map<K, V> result = new LinkedHashMap<K, V>();
+        result.put(k1, v1);
+        result.put(k2, v2);
+        result.put(k3, v3);
+        result.put(k4, v4);
+        return result;
+    }
+
+    public static <K, V> Map<K, V> mapOf(K k1, V v1, K k2, V v2, K k3, V v3, K k4, V v4, K k5, V v5) {
+        Map<K, V> result = new LinkedHashMap<K, V>();
+        result.put(k1, v1);
+        result.put(k2, v2);
+        result.put(k3, v3);
+        result.put(k4, v4);
+        result.put(k5, v5);
+        return result;
+    }
+
     @SuppressWarnings("unchecked")
     public static Object interpreter(CommandLine cmd) throws Exception {
         Field field = CommandLine.class.getDeclaredField("interpreter");
@@ -167,4 +209,23 @@ public class TestUtil {
         return interpreter;
     }
 
+    public static String stripHashcodes(String original) {
+        StringBuilder result = new StringBuilder();
+        int pos = original.indexOf('@');
+        int start = 0;
+        while (pos >= 0) {
+            result.append(original.substring(start, pos + 1));
+            start = pos + 1;
+            while (Character.isJavaIdentifierPart(original.charAt(start))) { start++; }
+            pos = original.indexOf('@', start);
+        }
+        if (start >= 0) {
+            result.append(original.substring(start));
+        }
+        return result.toString();
+    }
+
+    public static boolean equals(Object obj1, Object obj2) { return obj1 == null ? obj2 == null : obj1.equals(obj2); }
+    public static int hashCode(Object obj) {return obj == null ? 0 : obj.hashCode(); }
+    public static int hashCode(boolean bool) {return bool ? 1 : 0; }
 }

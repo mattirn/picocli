@@ -1,8 +1,8 @@
 = picocli - a mighty tiny command line interface
 //:author: Remko Popma
 //:email: rpopma@apache.org
-:revnumber: 4.2.1-SNAPSHOT
-:revdate: 2020-02-12
+:revnumber: 4.3.3-SNAPSHOT
+:revdate: 2020-05-16
 :toc: left
 :numbered:
 :toclevels: 2
@@ -48,6 +48,8 @@ all the source code lives in a single file, to encourage application authors to 
 
 How it works: annotate your class and picocli initializes it from the command line arguments,
 converting the input to strongly typed values in the fields of your class.
+
+TIP: picocli also provides a <<Programmatic API,programmatic API>>, separately from the annotations API.
 
 .A full working example picocli-based command line application
 [[CheckSum-application]]
@@ -107,7 +109,7 @@ Below are examples of configuring Gradle or Maven to use picocli as an external 
 
 ==== Gradle
 ----
-compile 'info.picocli:picocli:4.2.1-SNAPSHOT'
+compile 'info.picocli:picocli:4.3.3-SNAPSHOT'
 ----
 
 ==== Maven
@@ -115,7 +117,7 @@ compile 'info.picocli:picocli:4.2.1-SNAPSHOT'
 <dependency>
   <groupId>info.picocli</groupId>
   <artifactId>picocli</artifactId>
-  <version>4.2.1-SNAPSHOT</version>
+  <version>4.3.3-SNAPSHOT</version>
 </dependency>
 ----
 
@@ -158,7 +160,7 @@ https://immutables.github.io/apt.html[This page] shows the steps to configure Ec
       <path>
         <groupId>info.picocli</groupId>
         <artifactId>picocli-codegen</artifactId>
-        <version>4.2.1-SNAPSHOT</version>
+        <version>4.3.3-SNAPSHOT</version>
       </path>
     </annotationProcessorPaths>
     <compilerArgs>
@@ -174,8 +176,8 @@ See the https://github.com/remkop/picocli/tree/master/picocli-codegen[`picocli-c
 ===== Gradle
 ```
 dependencies {
-    compile 'info.picocli:picocli:4.2.1-SNAPSHOT'
-    annotationProcessor 'info.picocli:picocli-codegen:4.2.1-SNAPSHOT'
+    compile 'info.picocli:picocli:4.3.3-SNAPSHOT'
+    annotationProcessor 'info.picocli:picocli-codegen:4.3.3-SNAPSHOT'
 }
 ```
 
@@ -193,7 +195,7 @@ then replace `annotationProcessor` with `kapt`:
 apply plugin: 'kotlin-kapt' // required
 dependencies {
     // ...
-    kapt 'info.picocli:picocli-codegen:4.2.1-SNAPSHOT'
+    kapt 'info.picocli:picocli-codegen:4.3.3-SNAPSHOT'
 }
 ```
 
@@ -210,8 +212,7 @@ See the https://github.com/remkop/picocli/tree/master/picocli-codegen[`picocli-c
 
 == Options and Parameters
 Command line arguments can be separated into _options_  and _positional parameters_.
-Options have a name, positional parameters are usually the values that follow the options,
-but they may be mixed.
+Options have a name, positional parameters are usually the values that follow the options, but they may be mixed.
 
 image:OptionsAndParameters2.png[Example command with annotated @Option and @Parameters]
 
@@ -220,6 +221,7 @@ Picocli has separate annotations for options and positional parameters.
 === Options
 An option must have one or more `names`.
 Picocli lets you use any option name you want.
+Option names are case-sensitive by default, but this is <<Case Sensitivity,customizable>>.
 
 TIP: You may be interested in this http://catb.org/~esr/writings/taoup/html/ch10s05.html#id2948149[list of common option names]. Following these conventions may make your application more intuitive to use for experienced users.
 
@@ -315,7 +317,7 @@ Hi user123, your passphrase is hashed to 75K3eLr+dx6JJFuJ7LwIpEpOFmwGZZkRiB84PUR
 ==== Optionally Interactive
 Interactive options by default cause the application to wait for input on stdin. For commands that need to be run interactively as well as in batch mode, it is useful if the option can optionally consume an argument from the command line.
 
-The default <<Arity,arity>> for interactive options is zero, meaning that the option takes no parameters. From picocli 3.9.6, interactive options can also take a value from the command line if configured with `arity = "0..1"`.
+The default <<Arity,arity>> for interactive options is zero, meaning that the option takes no parameters. From picocli 3.9.6, interactive options can also take a value from the command line if configured with `arity = "0..1"`. (See <<Optional Values>>.)
 
 For example, if an application has these options:
 
@@ -357,7 +359,7 @@ The https://github.com/remkop/picocli/blob/master/picocli-examples[`picocli-exam
 [CAUTION]
 .Interactive options and shell applications with JLine 2
 ====
-Interactive options do not work in conjuction with JLine 2's `ConsoleReader`. Either implement a <<Custom Parameter Processing,`IParameterConsumer`>> which uses JLine2's `ConsoleReader` directly or use `picocli-shell-jline3`.
+Interactive options do not work in conjunction with JLine 2's `ConsoleReader`. Either implement a <<Custom Parameter Processing,`IParameterConsumer`>> which uses JLine2's `ConsoleReader` directly or use `picocli-shell-jline3`.
 ====
 
 === Short (POSIX) Options
@@ -463,8 +465,9 @@ The negated form of this option is `--backup`, and if that is specified, the def
 Any command line arguments that are not subcommands or options (or option parameters) are interpreted as positional parameters.
 Positional parameters generally follow the options but from picocli 2.0, positional parameters can be mixed with options on the command line.
 
+==== Explicit Index
+
 Use the (zero-based) `index` attribute to specify exactly which parameters to capture.
-Omitting the `index` attribute means the field captures _all_ positional parameters.
 Array or collection fields can capture multiple values.
 
 The `index` attribute accepts _range_ values, so an annotation like `@Parameters(index="2..4")` captures the arguments at index 2, 3 and 4. Range values can be _open-ended_. For example, `@Parameters(index="3..*")` captures all arguments from index 3 and up.
@@ -474,12 +477,12 @@ For example:
 [source,java]
 ----
 class PositionalParameters {
-    @Parameters(hidden = true)  // "hidden": don't show this parameter in usage help message
-    List<String> allParameters; // no "index" attribute: captures _all_ arguments (as Strings)
-
     @Parameters(index = "0")    InetAddress host;
     @Parameters(index = "1")    int port;
     @Parameters(index = "2..*") File[] files;
+
+    @Parameters(hidden = true)  // "hidden": don't show this parameter in usage help message
+    List<String> allParameters; // no "index" attribute: captures _all_ arguments
 }
 ----
 
@@ -492,10 +495,36 @@ PositionalParameters params = CommandLine.populateCommand(new PositionalParamete
 assert params.host.getHostName().equals("localhost");
 assert params.port == 12345;
 assert Arrays.equals(params.files, new File[] {new File("file1.txt"), new File("file2.txt")});
-assert params.allParameters.equals(Arrays.asList("localhost", "12345", "file1.txt", "file2.txt"));
+
+assert params.allParameters.equals(Arrays.asList(args));
+
 ----
 
 See <<Strongly Typed Everything>> for which types are supported out of the box and how to add custom types.
+
+==== Omitting the Index
+It is possible to omit the `index` attribute. This means different things for single-value and for multi-value positional parameters.
+
+For *multi-value* positional parameters (arrays or collections), omitting the `index` attribute means the field captures _all_ positional parameters (the equivalent of `index = "0..*"`).
+
+For *single-value* positional parameters, picocli's behaviour has changed since version 4.3:
+prior to picocli 4.3, the default index for single-value positional parameters was also `index = "0..*"`, even though only one value (usually the first argument) can be captured.
+From version 4.3, picocli assigns an index automatically, based on the other positional parameters defined in the same command.
+
+[CAUTION]
+====
+Automatic indexes depend on the ability of Java reflection and Java annotation processors to iterate over fields in declaration order in the source code.
+Officially this is not guaranteed by the Java spec.
+In practice this has worked in Oracle JVMs and OpenJDK from Java 6, but there is some risk this may not work in the future or on other JVM's.
+In general, for single-value positional parameters, using <<Explicit Index,explicit indexes>> is the safer option.
+(Multi-value positional parameters can safely omit the `index` attribute.)
+====
+
+IMPORTANT: Methods cannot be iterated over in predictable order.
+For applications with <<option-parameters-methods,`@Parameters`-annotated methods>> or combinations of `@Parameters`-annotated methods and `@Parameters`-annotated fields, we recommend using <<Explicit Index,explicit indexes>> for single-value positional parameters.
+
+
+See <<Automatic Parameter Indexes>> for details.
 
 === Mixing Options and Positional Parameters
 From picocli 2.0, positional parameters can be specified anywhere on the command line, they no longer need to follow the options.
@@ -550,6 +579,10 @@ assert demo.params.equals(Arrays.asList("-files", "file1", "file2"));
 ----
 
 A custom delimiter can be configured with `CommandLine.setEndOfOptionsDelimiter(String)`.
+
+From picocli 4.3, an entry for `--` can be shown in the options list of the usage help message of a command with the `@Command(showEndOfOptionsDelimiterInUsageHelp = true)` annotation.
+See <<Show End of Options>> for details.
+
 
 [[AtFiles]]
 === @-files
@@ -609,7 +642,8 @@ The documentation for these tools shows further examples.
 
 ==== @-files Usage Help
 
-From picocli 4.2, an entry for `@<filename>` can be shown in the options and parameters list of the usage help message of a command with the `@Command(showAtFileInUsageHelp = true)` annotation. See <<Show At Files>> for details.
+From picocli 4.2, an entry for `@<filename>` can be shown in the options and parameters list of the usage help message of a command with the `@Command(showAtFileInUsageHelp = true)` annotation.
+See <<Show At Files>> for details.
 
 
 ==== Simplified Format
@@ -1061,7 +1095,7 @@ git.commit.cleanup = strip
 [#fallbackValue-annotation]
 === `fallbackValue` Annotation
 
-If an option is defined with `arity = "0..1"`, it may or not have a parameter value.
+If an option is defined with `arity = "0..1"`, it <<Optional Values,may or may not have a parameter value>>.
 If such an option is specified without a value on the command line, it is assigned the fallback value.
 
 The `fallbackValue` annotation attribute was introduced in picocli 4.0; prior to this, (from picocli 2.3) an empty String was assigned.
@@ -1169,12 +1203,14 @@ A single command line argument like the following will be split up and three `in
 Similarly for <<Maps>>:
 [source,java]
 ----
-@Option(names = "-fix", split = "\\|")
+@Option(names = "-fix", split = "\\|", splitSynopsisLabel = "|")
 Map<Integer, String> message;
 ----
 With the above option, command line arguments like the following are interpreted as a set of key-value pairs instead of a single string:
+
+.Note: end users need to quote the option parameter to prevent the vertical bar `|` characters from being interpreted by the shell as "pipe" directives to connect processes.
 ----
--fix 8=FIX.4.4|9=69|35=A|49=MBT|56=TargetCompID|34=9|52=20130625-04:05:32.682|98=0|108=30|10=052
+-fix "8=FIX.4.4|9=69|35=A|49=MBT|56=TargetCompID|34=9|52=20130625-04:05:32.682|98=0|108=30|10=052"
 ----
 
 The above input results in the `message` field being assigned a `LinkedHashMap` with the following key-value pairs:
@@ -1183,8 +1219,10 @@ The above input results in the `message` field being assigned a `LinkedHashMap` 
 {8=FIX.4.4, 9=69, 35=A, 49=MBT, 56=TargetCompID, 34=9, 52=20130625-04:05:32.682, 98=0, 108=30, 10=052}
 ----
 
-
 See <<Quoted Values>> for details on handling more complex cases.
+
+Picocli 4.3 introduced the `splitSynopsisLabel` attribute to control what is shown in the synopsis of the usage help message.
+See <<Split Synopsis Label>> for details.
 
 === Arity
 Sometimes you want to define an option that requires more than one option parameter _for each option occurrence_ on the command line.
@@ -1216,6 +1254,49 @@ ArityDemo -s A B C -f 1.0 2.0 /file1 /file2
 Option `-s` has arity `"1..*"` but instead of consuming all parameters,
 the `-f` argument is recognized as a separate option.
 
+
+=== Variable Arity Limitations
+==== Variable Arity Options and Unknown Options
+As mentioned in the <<Arity,previous section>>, while processing parameters for an option with variable arity, when a known option, a subcommand, or the <<Double dash (`--`),end-of-options delimiter>> is encountered, picocli will stop adding parameters to the variable arity option.
+
+However, the picocli parser currently does not give special treatment to <<Unknown Options,unknown options>> (values that "look like" an option) when processing parameters for an option with variable arity.
+Such values are simply consumed by the option with variable arity. This may change in a future version of picocli.
+
+
+==== Variable Arity Options and Positional Parameters
+Be careful when defining commands that have both an option with variable arity (like `arity = "0..*"`) and a positional parameter.
+
+[WARNING]
+====
+The picocli parser is "greedy" when it handles option parameters for options with variable arity: it looks at the value following the option name, and if that value can be taken as a parameter (not another option or subcommand, and max arity is not reached yet) then it will process the value as a parameter for that option. This may not always be what you want.
+====
+
+For example:
+
+[source,java]
+----
+class Ambiguous {
+    @Parameters(description = "The file (required).")
+    File file;
+
+    @Option(names = "-y", arity = "0..*",
+      description = "Option with optional parameters")
+    List<String> values;
+}
+----
+
+When `-y a b c path/to/file` is specified on the command line, this results in an error: `Missing required parameter: <file>`.
+
+Users can use the <<Double dash (`--`),end-of-options delimiter>> and disambiguate the input with
+`-y a b c &dash;&dash; VALUE`, but this may not be obvious to many users.
+One idea is to <<Show End of Options,show the end-of-options>> delimiter in the usage help.
+
+A better alternative may be to redesign your command to avoid the ambiguity altogether.
+One idea is to use the <<Default Arity,default arity>> (`arity = "1"` in our example) and use the <<Split Regex,split>> attribute to allow users to specify multiple values in a single argument like `a,b,c`.
+If `-y` takes only a single parameter, then user input like `-y a,b,c path/to/file` is no longer ambiguous.
+
+
+
 === Default Arity
 If no `arity` is specified, the number of parameters depends on the field's type.
 
@@ -1242,7 +1323,7 @@ If your application relies on the previous behaviour, you need to explicitly spe
 | @Parameters Field Type | Default Arity | Notes
 | boolean      | 1 |Positional parameters of type `boolean` or `Boolean` require a value. Only `true` or `false` (case insensitive) are valid values.
 | Single-valued type (e.g., `int`, `String`, `File`) | 1 | One parameter required for each position.
-| Multi-valued type (arrays, collections or maps) | 0..1 | For multi-valued positional parameters (arrays, collections or maps), values are optional, not required.
+| Multi-valued type (arrays, collections or maps) | 0..1 | For multi-valued positional parameters (arrays, collections or maps), values are optional, not <<Required Parameters,required>>.
 |===
 
 
@@ -1253,8 +1334,60 @@ A `@Parameters` field with `index = "*"` is applied multiple times: once for eac
 When a `@Parameters` field is applied (because its index matches the index of the positional parameter), the field may consume zero, one or more arguments, depending on its arity.
 
 === Optional Values
-If an option is defined with `arity = "0..1"`, it may or not have a parameter value.
-If such an option is specified without a value on the command line, it is assigned the <<fallbackValue-annotation,fallback value>>.
+
+==== Optional Option Parameters
+When an option is defined with `arity = "0..1"`, it may or not have a parameter value.
+
+The <<fallbackValue-annotation,fallback value>> determines what value is assigned when the option is specified without a value, while the <<defaultValue-annotation,default value>> determines what value is assigned when the option is not specified at all.
+
+==== Optional Parameter Use Cases
+This feature is commonly used when an application wants to combine two options into one:
+the presence or absence of the option can be used like a boolean flag to trigger some behaviour, and the option value can be used to modify this behaviour.
+
+An example use case is an option that switches on logging when present, with an optional value to set the log level. For example:
+
+[source,java]
+----
+@Option(names = "--syslog", defaultValue = "OFF", fallbackValue = "INFO",
+  description = {
+        "When specified without arguments, start sending syslog messages at INFO level.",
+        "If absent, no messages are sent to syslog.",
+        "Optionally specify a severity value. Valid values: ${COMPLETION-CANDIDATES}."})
+MyLogLevel syslogLevel;
+----
+
+Another example use case is <<Optionally Interactive,password options>>.
+
+==== Optional Parameter Limitations
+Be careful when defining commands that have both an option with an optional parameter and a positional parameter.
+
+[WARNING]
+====
+The picocli parser is "greedy" when it handles optional parameters: it looks at the value following the option name, and if that value is likely to be a parameter (not another option or subcommand) then it will process the value as a parameter for that option. This may not always be what you want.
+====
+
+For example:
+
+[source,java]
+----
+class Ambiguous {
+    @Parameters(description = "The file (required).")
+    File file;
+
+    @Option(names = "-x", arity = "0..1",
+      description = "Option with optional parameter")
+    String value;
+}
+----
+
+When `-x VALUE` is specified on the command line, this results in an error: `Missing required parameter: <file>`.
+
+Users can use the <<Double dash (`--`),end-of-options delimiter>> and disambiguate the input with
+`-x &dash;&dash; VALUE`, but this may not be obvious to many users.
+One idea is to <<Show End of Options,show the end-of-options>> delimiter in the usage help.
+
+An alternative is to avoid the use of optional parameters and use the default arity in this scenario to eliminate the ambiguity altogether.
+
 
 == Required Arguments
 === Required Options
@@ -1306,43 +1439,7 @@ The following command line arguments would be accepted:
 ----
 
 === Options with an Optional Parameter
-
-Options with `arity = "0..1"` have an optional parameter.
-This can be useful for <<Optionally Interactive,password options>> and in some other cases.
-
-The <<fallbackValue-annotation,fallback value>> determines what value is assigned when the option is specified without a value, while the <<defaultValue-annotation,default value>> determines what value is assigned when the option is not specified at all.
-
-[WARNING]
-====
-Be careful when defining commands that have both an option with an optional parameter and a positional parameter.
-
-The picocli parser is "greedy" when it handles optional parameters: it looks at the value following the option name, and if that value is likely to be a parameter (not another option or subcommand) then it will process the value as a parameter for that option. This may not always be what you want.
-
-For example:
-
-[source,java]
-----
-class Ambiguous {
-    @Parameters(description = "The file (required).")
-    File file;
-
-    @Option(names = "-x", arity = "0..1",
-      description = "Option with optional parameter")
-    String value;
-
-    @Option(names = "-y", arity = "0..*",
-      description = "Option with optional parameters")
-    List<String> values;
-}
-----
-
-When `-x VALUE` is specified on the command line, this results in an error: `Missing required parameter: <file>`. Similarly, when `-y a b c path/to/file` is specified.
-
-Users can use the <<Double dash (`--`),end-of-options delimiter>> and disambiguate the input with
- `-x &dash;&dash; VALUE` or `-y a b c &dash;&dash; VALUE`, but this may not be obvious to many users.
-
-A better alternative may be to redesign your command to avoid the ambiguity altogether.
-====
+See <<Optional Values>>.
 
 == Argument Groups
 Picocli 4.0 introduces a new `@ArgGroup` annotation and its `ArgGroupSpec` programmatic equivalent.
@@ -1721,11 +1818,58 @@ usage help shows the wrong default value
 
 When a `@Parameters` positional parameter is part of a group, its `index` is the index _within the group_, not within the command.
 
+Below is an example of an application that uses a repeating group of positional parameters:
+
+[source,java]
+----
+@Command(name = "grades", mixinStandardHelpOptions = true, version = "grades 1.0")
+public class Grades implements Runnable {
+
+    static class StudentGrade {
+        @Parameters(index = "0") String name;
+        @Parameters(index = "1") BigDecimal grade;
+    }
+
+    @ArgGroup(exclusive = false, multiplicity = "1..*")
+    List<StudentGrade> gradeList;
+
+    @Override
+    public void run() {
+        gradeList.forEach(e -> System.out.println(e.name + ": " + e.grade));
+    }
+
+    public static void main(String[] args) {
+        System.exit(new CommandLine(new Grades()).execute(args));
+    }
+}
+----
+
+Running the above program with this input:
+
+----
+Alice 3.1 Betty 4.0 "X Æ A-12" 3.5 Zaphod 3.4
+----
+
+Produces the following output:
+
+----
+Alice: 3.1
+Betty: 4.0
+X Æ A-12: 3.5
+Zaphod: 3.4
+----
 
 === Argument Group Limitations
 
-* Options with the same name cannot be defined in multiple groups. Similarly, it is not possible to define an option outside of a group with the same name as a different option that is part of a group.
-* Positional parameters in a single group work fine, but take care (or avoid) defining positional parameters in multiple groups or positional parameters in a group as well as outside a group. Positional parameters are matched by index, and while the index of a group is reset when a new group multiple is encountered, the index of positional parameters outside a group only increases and is never reset.
+* Options with the same name cannot be defined in multiple groups.
+  Similarly, it is not possible to define an option outside of a group with the same name as a different option that is part of a group.
+* Positional parameters in a single group work fine, but take care (or avoid) defining positional parameters in multiple groups or positional parameters in a group as well as outside a group.
+  Positional parameters are matched by index, and while the index of a group is reset when a new group multiple is encountered, the index of positional parameters outside a group only increases and is never reset.
+* Some relationships between options cannot be expressed with picocli argument groups.
+  In general, picocli argument groups can only express relationship for which you can write a command line synopsis with every option occurring only once.
+  For example, it is not possible to use argument groups to create a relationship with exclusive options `[-a | -b]`,
+  where `-a` requires another option `-c`: `[[-a] -c]`, while at the same time `-b` is independent of `-c`: `[-b] [-c]`.
+  The application may need to do some programmatic validation in such cases.
 
 
 
@@ -2074,7 +2218,7 @@ for mistyped options, or the full usage help message of the problematic command.
 Finally, the handler returns an <<Exception Exit Codes,exit code>>.
 This is sufficient for most applications.
 
-Sometimes you want to display a shorter message. For example, the `grep` utility does not not show the full usage help when it gets an invalid argument:
+Sometimes you want to display a shorter message. For example, the `grep` utility does not show the full usage help when it gets an invalid argument:
 
 ----
 $ grep -d recurese "ERROR" logs/*
@@ -2141,22 +2285,102 @@ new CommandLine(new MyApp())
 Where the `IExecutionExceptionHandler` implementation could look something like this:
 [source,java]
 ----
-class PrintExceptionMessageHandler implements IExecutionExceptionHandler() {
+class PrintExceptionMessageHandler implements IExecutionExceptionHandler {
     public int handleExecutionException(Exception ex,
                                         CommandLine commandLine,
                                         ParseResult parseResult) {
 
         commandLine.getErr().println(ex.getMessage());
 
-        return cmd.getExitCodeExceptionMapper() != null
-                    ? cmd.getExitCodeExceptionMapper().getExitCode(ex)
-                    : cmd.getCommandSpec().exitCodeOnExecutionException();
+        return commandLine.getExitCodeExceptionMapper() != null
+                    ? commandLine.getExitCodeExceptionMapper().getExitCode(ex)
+                    : commandLine.getCommandSpec().exitCodeOnExecutionException();
     }
 }
 ----
 
 
 == Parser Configuration
+
+=== Case Sensitivity
+By default, all options and subcommands are case sensitive.
+From picocli 4.3, case sensitivity is configurable.
+Case sensitivity can be switched off globally, as well as on a per-command basis.
+
+To toggle case sensitivity for all commands, use the `CommandLine::setSubcommandsCaseInsensitive` and `CommandLine::setOptionsCaseInsensitive` methods.
+Use the `CommandSpec::subcommandsCaseInsensitive` and `CommandSpec::optionsCaseInsensitive` methods to give some commands a different case sensitivity than others.
+
+Where possible, picocli will try to prevent ambiguity: when multiple options with the same name are registered in a command, a `DuplicateOptionAnnotationsException` is thrown.
+When multiple subcommands with the same name are registered in a command, a `DuplicateNameException` is thrown.
+
+With case sensitivity switched off, the same principle applies: multiple options whose names differ only in case cannot be registered in a command.
+Similarly, multiple subcommands cannot be registered when their names differ only in case.
+
+[WARNING]
+====
+When a combination of POSIX options resembles a long option, picocli will prioritize the long option.
+This is the case regardless of case sensitivity, but be aware that with case sensitivity switched off, the chance of such collisions increases.
+For example, if a command has POSIX options `-a`, `-b`, and `-c`, and a long option `-ABC`, then, when the user specifies `-abc`, picocli will recognize it as the long option `-ABC`, not as the POSIX options.
+====
+
+See the https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/casesensitivity[casesensitivity] package in `picocli-examples` for some examples.
+
+=== Abbreviated Options and Subcommands
+
+Since picocli 4.4, the parser can recognize abbreviated options and subcommands.
+This needs to be enabled explicitly with `CommandLine::setAbbreviatedOptionsAllowed` and `CommandLine::setAbbreviatedSubcommandsAllowed`.
+
+==== Recognized Abbreviations
+When abbreviations are enabled, users can specify the initial letter(s) of the first component and optionally of one or more subsequent components of an option or subcommand name.
+
+"Components" are separated by `-` dash characters or by case, so for example, both `--CamelCase` and `--kebab-case` have two components.
+
+[NOTE]
+====
+When case sensitivity is <<Case Sensitivity,disabled>> only the `-` dash character can be used to separate components.
+====
+
+.Examples of valid abbreviations
+[options="header"]
+|===
+|Option or Subcommand|Recognized Abbreviations
+|`--veryLongCamelCase` | `--very`, `--vLCC`, `--vCase`
+|`--super-long-option` | `--sup`, `--sLO`, `--s-l-o`, `--s-lon`, `--s-opt`, `--sOpt`
+|`some-long-command` | `so`, `sLC`, `s-l-c`, `soLoCo`, `someCom`
+|===
+
+==== Ambiguous Abbreviations
+When the user specifies input that can match multiple options or subcommands, the parser throws a `ParameterException`.
+When applications use the `execute` method, a <<Invalid User Input,short error message>> and the usage help is displayed to the user.
+
+For example, given a command with subcommands `help` and `hello`, then ambiguous user input like `hel` will show this error message:
+
+----
+Error: 'hel' is not unique: it matches 'hello', 'help'
+----
+
+==== Abbreviated Long Options and POSIX Clustered Short Options
+
+When an argument can match both a long option and a set of <<Short (POSIX) Options,clustered short options>>, picocli matches the long option.
+
+For example:
+
+[source,java]
+----
+class AbbreviationsAndPosix {
+    @Option(names = "-A") boolean a;
+    @Option(names = "-B") boolean b;
+    @Option(names = "-AaaBbb") boolean aaaBbb;
+}
+AbbreviationsAndPosix app = new AbbreviationsAndPosix();
+new CommandLine(app).setAbbreviatedOptionsAllowed(true).parseArgs("-AB");
+assertTrue(app.aaaBbb);
+assertFalse(app.a);
+assertFalse(app.b);
+----
+
+When abbreviated options are enabled, user input `-AB` will match the long `-AaaBbb` option, but not the `-A` and `-B` options.
+
 
 === Overwriting Single Options
 
@@ -2276,7 +2500,7 @@ By default, the picocli parser allows POSIX clustered short options, so short op
 From picocli 3.0, applications can call `CommandLine.setPosixClusteredShortOptionsAllowed(false)` to enforce that options must be separated with whitespace on the command line.
 (This also means that option parameters must be separated from the option name by whitespace or the `=` <<Option-Parameter Separators,separator>> character, so `-D key=value` and `-D=key=value` will be recognized but `-Dkey=value` will not.)
 
-=== Lenient Mode (Incubating)
+=== Lenient Mode
 From picocli 3.2, the parser can be configured to continue parsing invalid input to the end.
 When `collectErrors` is set to `true`, and a problem occurs during parsing, an `Exception` is added to the `ParseResult.errors()` list and parsing continues. The default behaviour (when `collectErrors` is `false`) is to abort parsing by throwing the `Exception`.
 
@@ -2910,6 +3134,32 @@ When mixing `@Option` methods and `@Option` fields, options do not reliably appe
 The `@Option(order = <int>)` attribute can be used to explicitly control the position in the usage help message at which the option should be shown.
 Options with a lower number are shown before options with a higher number.
 
+
+=== Split Synopsis Label
+Options and parameters may have a <<Split Regex, `split`>> attribute to split each parameter into smaller substrings.
+Regular expressions may contain literal text, but may also contain https://www.regular-expressions.info/characters.html[special characters].
+The regular expression in the `split` attribute may be quite different from what end users need to type.
+
+The example below uses the plus (`+`) character as a separator.
+The regular expression in the `split` attribute uses backslash (`\`) characters to make sure that the plus character is treated as a literal.
+
+[source,java]
+----
+@Parameters(split = "\\+", splitSynopsisLabel = "+", paramLabel = "VALUE")
+List<String> values;
+----
+
+However, end users can type simply  `A+B+C` (using the plus character separator), not  `A\+B\+C`.
+We want the usage help message to show this.
+
+The `splitSynopsisLabel` attribute, introduced in picocli 4.3, controls what is shown in the synopsis of the usage help message.
+
+With the example above, the synopsis of the usage help looks like this:
+
+----
+Usage: cmd [VALUE[+VALUE...]...]
+----
+
 === Abbreviated Synopsis
 If a command is very complex and has many options, it is sometimes desirable to suppress details from the synopsis with the `abbreviateSynopsis` attribute. For example:
 ----
@@ -2925,7 +3175,6 @@ class App {
     ....
 }
 ----
-
 
 === Custom Synopsis
 For even more control of the synopsis, use the `customSynopsis` attribute to specify one ore more synopsis lines. For example:
@@ -3235,6 +3484,102 @@ Example command.
   -V, --version         Print version information and exit.
 ----
 
+=== Show End of Options
+
+From picocli 4.3, an entry for the `--` <<Double dash (`--`),End of Options delimiter>> can be shown in the options list of the usage help message of a command with the `@Command(showEndOfOptionsDelimiterInUsageHelp = true)` annotation.
+
+==== Example
+
+Example command:
+
+[source,java]
+----
+@Command(name = "myapp", showEndOfOptionsDelimiterInUsageHelp = true,
+        mixinStandardHelpOptions = true, description = "Example command.")
+class MyApp {
+    @Parameters(description = "A file.") File file;
+}
+----
+
+The usage help message for this command looks like this:
+
+----
+Usage: myapp [-hV] [--] <file>
+Example command.
+      <file>      A file.
+  -h, --help      Show this help message and exit.
+  -V, --version   Print version information and exit.
+  --              This option can be used to separate command-line options from
+                    the list of positional parameters.
+----
+
+==== Changing the End of Options Entry Location
+
+By default, the `--` End of Options entry is shown between the options and the positional parameters in the synopsis, and at the end of the options list.
+
+This can be changed with the <<Usage Help API,Help API>> for reordering sections. For example:
+
+[source,java]
+----
+import static picocli.CommandLine.Model.UsageMessageSpec.SECTION_KEY_END_OF_OPTIONS;
+import static picocli.CommandLine.Model.UsageMessageSpec.SECTION_KEY_OPTION_LIST;
+import static picocli.CommandLine.Model.UsageMessageSpec.SECTION_KEY_OPTION_LIST_HEADING;
+
+@Command(name = "myapp", showEndOfOptionsDelimiterInUsageHelp = true,
+        mixinStandardHelpOptions = true, description = "Example command.")
+class MyApp {
+    @Parameters(description = "A file.") File file;
+
+    public static void main(String... args) {
+        CommandLine cmd = new CommandLine(new MyApp());
+        List<String> copy = new ArrayList<>(cmd.getHelpSectionKeys());
+        copy.remove(SECTION_KEY_END_OF_OPTIONS);
+        copy.add(copy.indexOf(SECTION_KEY_OPTION_LIST), SECTION_KEY_END_OF_OPTIONS);
+        cmd.setHelpSectionKeys(copy);
+
+        cmd.usage(System.out);
+    }
+}
+----
+
+The resulting usage help message shows the `--` End of Options entry has moved up, to the beginning the options list:
+
+----
+Usage: myapp [-hV] [--] <file>
+Example command.
+      <file>      A file.
+  --              This option can be used to separate command-line options from
+                    the list of positional parameters.
+  -h, --help      Show this help message and exit.
+  -V, --version   Print version information and exit.
+----
+
+==== Changing the End of Options Entry Text
+
+The description of the `--` End of Options delimiter entry has been defined with a <<Custom Variables,custom variable>>, to allow applications to change the text. The variable is:
+
+* `picocli.endofoptions.description`
+
+By setting the above variable in either system properties, environment variables or the <<Internationalization,resource bundle>> for a command, the text can be customized.
+
+For example, if we define this system property:
+
+[source,java]
+----
+System.setProperty("picocli.endofoptions.description", "End of options. Remainder are positional parameters.");
+----
+
+then the usage help for our above example changes to this:
+
+----
+Usage: myapp [-hV] [--] <file>
+Example command.
+      <file>      A file.
+  -h, --help      Show this help message and exit.
+  -V, --version   Print version information and exit.
+  --              End of options. Remainder are positional parameters.
+----
+
 === Show Default Values
 ==== `${DEFAULT-VALUE}` Variable
 From picocli 3.2, it is possible to embed the <<Default Values,default values>> in the description for an option or positional parameter by
@@ -3487,11 +3832,14 @@ The below code snippet shows how a custom color scheme can be specified to confi
 [source,java]
 ----
 // see also CommandLine.Help.defaultColorScheme()
-ColorScheme colorScheme = new ColorScheme()
+ColorScheme colorScheme = new ColorScheme.Builder()
         .commands    (Style.bold, Style.underline)    // combine multiple styles
         .options     (Style.fg_yellow)                // yellow foreground color
         .parameters  (Style.fg_yellow)
-        .optionParams(Style.italic);
+        .optionParams(Style.italic)
+        .errors      (Style.fg_red, Style.bold)
+        .stackTraces (Style.italic)
+        .build();
 
 CommandLine.usage(annotatedObject, System.out, colorScheme);
 ...
@@ -3520,6 +3868,8 @@ picocli.color.commands
 picocli.color.options
 picocli.color.parameters
 picocli.color.optionParams
+picocli.color.errors
+picocli.color.stackTraces
 ----
 
 For example:
@@ -3820,7 +4170,9 @@ From v0.9.8, picocli supports registering subcommands declaratively with the `@C
 public class Git { ... }
 ----
 
-Subcommands referenced in a `subcommands` attribute _must_ have a `@Command` annotation with a `name` attribute, or an exception is thrown from the `CommandLine` constructor. This name will be used both for generating usage help and for recognizing subcommands when parsing the command line.
+Subcommands referenced in a `subcommands` attribute _must_ have a `@Command` annotation with a `name` attribute, or an exception is thrown from the `CommandLine` constructor.
+This name will be used both for generating usage help and for recognizing subcommands when parsing the command line.
+Command names are case-sensitive by default, but this is <<Case Sensitivity,customizable>>.
 
 Custom type converters registered on a `CommandLine` instance will apply to all subcommands that were declared on the main command with the `subcommands` annotation.
 
@@ -4006,7 +4358,123 @@ class MyApp implements Runnable {
 
 This ensures the `init` method is called _after_ the command line is parsed (so all options and positional parameters are assigned) but _before_ the user-specified subcommand is executed.
 
-The https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/logging[logging example] in `picocli-examples` shows how this can be used to configure the Log4j log level based on a `--verbose` option, prior to execution.
+The https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/logging_mixin_advanced[logging example] in `picocli-examples` shows how this can be used to configure the Log4j log level based on a `--verbose` option, prior to execution.
+
+[#parentcommand-annotation]
+=== `@ParentCommand` Annotation
+In command line applications with subcommands, options of the top level command are often intended as "global" options that apply to all the subcommands. Prior to picocli 2.2, subcommands had no easy way to access their parent command options unless the parent command made these values available in a global variable.
+
+The `@ParentCommand` annotation introduced in picocli 2.2 makes it easy for subcommands to access their parent command options: subcommand fields annotated with `@ParentCommand` are initialized with a reference to the parent command. For example:
+
+[source,java]
+----
+@Command(name = "fileutils", subcommands = List.class)
+class FileUtils {
+
+    @Option(names = {"-d", "--directory"},
+            description = "this option applies to all subcommands")
+    File baseDirectory;
+}
+----
+
+The above top-level command has a `--directory` option that applies to its subcommands.
+The `List` subcommand can use the `@ParentCommand` annotation to get a reference to the parent command, so it can easily access the parent command options.
+
+[source,java]
+----
+@Command(name = "list")
+class List implements Runnable {
+
+    @ParentCommand
+    private FileUtils parent; // picocli injects reference to parent command
+
+    @Option(names = {"-r", "--recursive"},
+            description = "Recursively list subdirectories")
+    private boolean recursive;
+
+    @Override
+    public void run() {
+        list(new File(parent.baseDirectory, "."));
+    }
+
+    private void list(File dir) {
+        System.out.println(dir.getAbsolutePath());
+        if (dir.isDirectory()) {
+            for (File f : dir.listFiles()) {
+                if (f.isDirectory() && recursive) {
+                    list(f);
+                } else {
+                    System.out.println(f.getAbsolutePath());
+                }
+            }
+        }
+    }
+}
+----
+
+=== Inherited Options
+Picocli 4.3 adds support for "inherited" options.
+Options defined with `scope = ScopeType.INHERIT` are shared with all subcommands (and sub-subcommands, to any level of depth).
+Applications can define an inherited option on the top-level command, in one place, to allow end users to specify this option anywhere: not only on the top-level command, but also on any of the subcommands and nested sub-subcommands.
+
+Below is an example where an inherited option is used to configure logging.
+
+[source,java]
+----
+@Command(name = "app", subcommands = Sub.class)
+class App implements Runnable {
+    private static Logger logger = LogManager.getLogger(App.class);
+
+    @Option(names = "-x", scope = ScopeType.LOCAL) // option is not shared: this is the default
+    int x;
+
+    @Option(names = "-v", scope = ScopeType.INHERIT) // option is shared with subcommands
+    public void setVerbose(boolean[] verbose) {
+        // Configure log4j.
+        // (This is a simplistic example: a real application may use more levels and
+        // perhaps configure only the ConsoleAppender level instead of the root log level.)
+        Configurator.setRootLevel(verbose.length > 0 ? Level.DEBUG : Level.INFO);
+    }
+
+    public void run() {
+        logger.debug("-x={}", x);
+    }
+}
+
+@Command(name = "sub")
+class Sub implements Runnable {
+    private static Logger logger = LogManager.getLogger(Sub.class);
+
+    @Option(names = "-y")
+    int y;
+
+    public void run() {
+        logger.debug("-y={}", y);
+    }
+}
+----
+
+Users can specify the `-v` option on either the top-level command or on the subcommand, and it will have the same effect.
+
+----
+# the -v option can be specified on the top-level command
+java App -x=3 -v sub -y=4
+----
+
+Specifying the `-v` option on the subcommand will have the same effect. For example:
+----
+# specifying the -v option on the subcommand also changes the log level
+java App -x=3 sub -y=4 -v
+----
+
+[NOTE]
+====
+Subcommands don't need to do anything to receive inherited options, but a potential drawback is that subcommands do not get a reference to inherited options.
+
+Subcommands that need to inspect the value of an inherited option can use the <<parentcommand-annotation,`@ParentCommand` annotation>> to get a reference to their parent command, and access the inherited option via the parent reference.
+Alternatively, for such subcommands, sharing options via <<Mixins,mixins>> may be a more suitable mechanism.
+====
+
 
 === Manually Parsing Subcommands
 For the following example, we assume we created an alias `git` that invokes our Java application. This could also be a script or a function that calls our Java program:
@@ -4070,58 +4538,6 @@ private void handleParseResult(ParseResult parsed) {
 
 You may be interested in the <<Executing Commands,execute method>> to reduce error handling and other boilerplate code in your application.
 See also the previous section, <<Executing Subcommands>>.
-
-[#parentcommand-annotation]
-=== `@ParentCommand` Annotation
-In command line applications with subcommands, options of the top level command are often intended as "global" options that apply to all the subcommands. Prior to picocli 2.2, subcommands had no easy way to access their parent command options unless the parent command made these values available in a global variable.
-
-The `@ParentCommand` annotation introduced in picocli 2.2 makes it easy for subcommands to access their parent command options: subcommand fields annotated with `@ParentCommand` are initialized with a reference to the parent command. For example:
-
-[source,java]
-----
-@Command(name = "fileutils", subcommands = List.class)
-class FileUtils {
-
-    @Option(names = {"-d", "--directory"},
-            description = "this option applies to all subcommands")
-    File baseDirectory;
-}
-----
-
-The above top-level command has a `--directory` option that applies to its subcommands.
-The `List` subcommand can use the `@ParentCommand` annotation to get a reference to the parent command, so it can easily access the parent command options.
-
-[source,java]
-----
-@Command(name = "list")
-class List implements Runnable {
-
-    @ParentCommand
-    private FileUtils parent; // picocli injects reference to parent command
-
-    @Option(names = {"-r", "--recursive"},
-            description = "Recursively list subdirectories")
-    private boolean recursive;
-
-    @Override
-    public void run() {
-        list(new File(parent.baseDirectory, "."));
-    }
-
-    private void list(File dir) {
-        System.out.println(dir.getAbsolutePath());
-        if (dir.isDirectory()) {
-            for (File f : dir.listFiles()) {
-                if (f.isDirectory() && recursive) {
-                    list(f);
-                } else {
-                    System.out.println(f.getAbsolutePath());
-                }
-            }
-        }
-    }
-}
-----
 
 === Nested sub-Subcommands
 The specified object can be an annotated object or a
@@ -4384,16 +4800,11 @@ See <<Custom Help Subcommands>> for more details on creating help subcommands.
 
 For some command suites, it does not make sense to invoke the top-level command by itself, and the user is required to specify a subcommand.
 
-Picocli does not offer direct support for making a subcommand required, but it does provide the tools to:
+From version 4.3, picocli makes it easy to accomplish this: simply use the <<Executing Subcommands,`execute` method>> to start your application, and make the top-level command a class that does not implement `Runnable` or `Callable`.
 
-* display a synopsis that indicates that subcommands are mandatory
-* respond appropriately when the user input is invalid
+Then, when the user specifies only the top-level command, without a subcommand, while this top-level command does not implement `Runnable` or `Callable`, picocli internally throws a `ParameterException` with the error message `"Missing required subcommand"`. This will cause the <<Invalid User Input, `IParameterExceptionHandler`>> to be called, which will display this message to the user.
 
-By default, the synopsis of a command with subcommands shows `[COMMAND]`, indicating that a subcommand can optionally be specified.
-To show that the subcommand is mandatory, set the `synopsisSubcommandLabel` attribute to `COMMAND`, without the `[` and `]` brackets.
-
-If the end user invokes the top-level command without specifying a subcommand, one way to respond is to show an error message followed by the usage help of the top-level command.
-This can be accomplished by letting the top-level command throw a `ParameterException`. For example:
+Prior to picocli 4.3, applications could indicate that subcommands are required by letting the top-level command throw a `ParameterException`. For example:
 
 [source,java]
 ----
@@ -4408,6 +4819,9 @@ class Git implements Runnable {
     }
 }
 ----
+
+By default, the synopsis of a command with subcommands shows `[COMMAND]`, indicating that a subcommand can optionally be specified.
+To show that the subcommand is mandatory, set the `synopsisSubcommandLabel` attribute to `COMMAND`, without the `[` and `]` brackets.
 
 
 == Reuse
@@ -4511,6 +4925,60 @@ assert cmd.myMixin.verbosity.length == 3;
 Mixins added with the `@Mixin` annotation can also be accessed via the map returned by `CommandLine.getMixins`.
 
 The GitHub project has a https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/mixin[full working example].
+
+==== Mixin Example: Logger
+
+Here is an example mixin class `MyLogger`.
+It has an option `-v` that can be specified multiple times to increase verbosity.
+The `MyLogger` class also provides some methods like `debug` and `trace` that can be used to print messages to the standard error stream.
+
+[source,java]
+----
+public class MyLogger {
+
+    @Option(names = {"-v", "--verbose"},
+            description = "Increase verbosity. Specify multiple times to increase (-vvv).")
+    boolean[] verbosity = new boolean[0];
+
+    public void info(String pattern, Object... params) {
+        log(0, pattern, params);
+    }
+
+    public void debug(String pattern, Object... params) {
+        log(1, pattern, params);
+    }
+
+    public void trace(String pattern, Object... params) {
+        log(2, pattern, params);
+    }
+
+    private void log(int level, String pattern, Object... params) {
+        if (verbosity.length > level) {
+            System.err.printf(pattern, params);
+        }
+    }
+}
+----
+
+An application could use the mixin like this:
+
+[source,java]
+----
+class MyApp implements Runnable {
+
+    @Mixin MyLogger myLogger;
+
+    public void run() {
+        myLogger.info("Hello info%n");
+        myLogger.debug("Hello debug%n");
+        myLogger.trace("Hello trace%n");
+    }
+
+    public static void main(String[] args) {
+        System.exit(new CommandLine(new MyApp()).execute(args));
+    }
+}
+----
 
 ==== Accessing the Mixee from a Mixin
 
@@ -4630,7 +5098,7 @@ assert mixin.verbosity.length == 3;
 === Use Case: Configure Log Level with a Global Option
 
 For mixins that need to be reusable across more than two levels in the command hierarchy,
-declaring a <<_spec_annotation,`@Spec(Spec.Target.MIXEE)`-annotated>> field gives the mixin access to the full command hierarchy.
+declaring a <<spec-annotation,`@Spec(MIXEE)`-annotated>> field gives the mixin access to the full command hierarchy.
 
 The `MIXEE` value indicates that the `CommandSpec` to inject is not the spec of the enclosing class, but the spec of the command where the `@Mixin` is used.
 
@@ -4742,7 +5210,12 @@ java MyApp sub -v subsubmethod
 java MyApp sub subsubmethod -vv
 ----
 
-See also the https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/logging[logging] example in `picocli-examples` for a way to modify only the Log4j ConsoleAppenders' log level from the specified verbosity.
+See also the https://github.com/remkop/picocli/tree/master/picocli-examples/src/main/java/picocli/examples/logging_mixin_advanced[logging] example in `picocli-examples` for a way to modify only the Log4j ConsoleAppenders' log level from the specified verbosity.
+
+=== Sharing Options in Subcommands
+
+The above use case can also be accomplished (with less code) via <<Inherited Options>>.
+Inherited options are another reuse mechanism where an application defines an option on one command, after which end users can specify this option on any of the subcommands, and it will set the value of the annotated field on the parent command.
 
 === Reuse Combinations
 
@@ -4974,6 +5447,7 @@ The following variables are predefined:
 |`${COMMAND-FULL-NAME}`| 4.0 | any section of the usage help message for a command| replaced with the fully qualified name of the command (that is, preceded by its parent fully qualified name)
 |`${PARENT-COMMAND-NAME}`| 4.0 | any section of the usage help message for a command| replaced with the name of its parent command
 |`${PARENT-COMMAND-FULL-NAME}`| 4.0 | any section of the usage help message for a command| replaced with the fully qualified name of its parent command (that is, preceded by the name(s) of the parent command's ancestor commands)
+|`${ROOT-COMMAND-NAME}`| 4.4 | any section of the usage help message for a command| replaced with the name of the top-level command (in a command suite with subcommands)
 |===
 
 === Custom Variables
@@ -5035,6 +5509,15 @@ If these attributes have variables, and the variables get a different value afte
 
 == Tips & Tricks
 
+=== Programmatic API
+
+Picocli also provides a link:picocli-programmatic-api.html[programmatic API], in addition to the annotations API.
+
+The programmatic API allows applications to dynamically create command line options on the fly, where not all options are known in advance.
+It also makes it possible to use picocli in other JVM languages that do not support annotations.
+
+Another use case is creating idiomatic domain-specific languages for processing command line arguments.
+For example, Groovy's http://groovy-lang.org/dsls.html#_clibuilder[CliBuilder DSL] is implemented using picocli's programmatic API.
 
 [#option-parameters-methods]
 === `@Option` and `@Parameters` Methods
@@ -5280,15 +5763,6 @@ When `@Spec(Spec.Target.MIXEE)` is specified in a mixin class, the `CommandSpec`
 This can be useful when a mixin contains logic that is common to many commands.
 See <<Accessing the Mixee from a Mixin>> for more details.
 
-=== Improved Support for Chinese, Japanese and Korean
-Picocli will align the usage help message to fit within some user-defined width (80 columns by default).
-A number of characters in Chinese, Japanese and Korean (CJK) are wider than others.
-If those characters are treated to have the same width as other characters, the usage help message may extend past the right margin.
-
-From 4.0, picocli will use 2 columns for these wide characters when calculating where to put line breaks, resulting in better usage help message text.
-
-This can be switched off with `CommandLine.setAdjustLineBreaksForWideCJKCharacters(false)`.
-
 === Custom Factory
 
 Declaratively registered <<Registering Subcommands Declaratively,subcommands>>, <<Option-specific Type Converters,type converters>> and <<Dynamic Version Information,version providers>> must be instantiated somehow. From picocli 2.2, a custom factory can be specified when constructing a `CommandLine` instance. This allows full control over object creation and opens possibilities for Inversion of Control and Dependency Injection (see <<Dependency Injection,next section>>). For example:
@@ -5332,6 +5806,137 @@ public <K> K create(Class<K> clazz) throws Exception {
     }
 }
 ```
+
+
+=== Automatic Parameter Indexes
+==== Automatic Indexes
+
+<<Positional Parameters,Positional parameters>> have an `index` attribute that determines which command line argument(s) are captured.
+It is possible to omit the `index` attribute and let picocli automatically assign an index.
+
+This means different things for single-value and for multi-value positional parameters.
+
+For *multi-value* positional parameters (arrays or collections), omitting the `index` attribute means the field captures _all_ positional parameters (the equivalent of `index = "0..*"`).
+
+For *single-value* positional parameters, picocli's behaviour has changed since version 4.3:
+prior to picocli 4.3, the default index for single-value positional parameters was also `index = "0..*"`, even though only one value (usually the first argument) can be captured.
+From version 4.3, the default index is `index = "0+"`, which tells picocli to assign an index automatically, starting from zero, based on the other positional parameters defined in the same command.
+A simple example can look like this:
+
+[source,java]
+----
+class AutomaticIndex {
+    @Parameters(hidden = true)  // "hidden": don't show this parameter in usage help message
+    List<String> allParameters; // no "index" attribute: captures _all_ arguments
+
+    @Parameters String group;    // assigned index = "0"
+    @Parameters String artifact; // assigned index = "1"
+    @Parameters String version;  // assigned index = "2"
+}
+----
+
+Picocli initializes fields with the values at the specified index in the arguments array.
+[source,java]
+----
+String[] args = { "info.picocli", "picocli", "4.3.0" };
+AutomaticIndex auto = CommandLine.populateCommand(new AutomaticIndex(), args);
+
+assert auto.group.equals("info.picocli");
+assert auto.artifact.equals("picocli");
+assert auto.version.equals("4.3.0");
+assert auto.allParameters.equals(Arrays.asList(args));
+----
+
+[CAUTION]
+====
+Automatic indexes depend on the ability of Java reflection and Java annotation processors to iterate over fields in declaration order in the source code.
+Officially this is not guaranteed by the Java spec.
+In practice this has worked in Oracle JVMs and OpenJDK from Java 6, but there is some risk this may not work in the future or on other JVM's.
+In general, for single-value positional parameters, using <<Explicit Index,explicit indexes>> is the safer option.
+(Multi-value positional parameters can safely omit the `index` attribute.)
+====
+
+IMPORTANT: Methods cannot be iterated over in predictable order.
+For applications with <<option-parameters-methods,`@Parameters`-annotated methods>> or combinations of `@Parameters`-annotated methods and `@Parameters`-annotated fields, we recommend using <<Explicit Index,explicit indexes>> for single-value positional parameters.
+
+==== Anchored Automatic Index
+The default automatic index (`index = "0+"`) for single-value positional parameters is "anchored at zero": it starts at zero, and is increased with each additional positional parameter.
+
+Sometimes you want to have indexes assigned automatically from a different starting point than zero.
+This can be useful when defining <<Mixins>> with positional parameters.
+
+To accomplish this, specify an index with the anchor point and a `+` character to indicate that picocli should start to automatically assign indexes from that anchor point. For example:
+
+[source,java]
+----
+class Anchored {
+    @Parameters(index = "1+") String p1; // assigned index = "1" or higher
+    @Parameters(index = "1+") String p2; // assigned index = "2" or higher
+}
+----
+
+==== Combining Explicit and Automatic Indexes
+If a command defines a positional parameter with an explicit index at the anchor point, then automatic indexes anchored at that point will start from the explicit index plus 1.
+For example:
+
+[source,java]
+----
+class ExplicitAndAutomaticIndexes {
+    @Parameters(index = "0") String explicit0;   // explicit index "0" at default anchor point
+    @Parameters String pAuto1;                   // assigned index "1", anchor point + 1
+    @Parameters String pAuto2;                   // assigned index "2"
+    @Parameters(index = "1+") String pAnchored1; // assigned index "1": no explicit index 1
+    @Parameters(index = "1+") String pAnchored2; // assigned index "2"
+    @Parameters(index = "2") String explicit2;   // explicit index "2", matching anchor for "2+"
+    @Parameters(index = "2+") String pAnchored3; // assigned index "3", anchor point + 1
+    @Parameters(index = "2+") String pAnchored4; // assigned index "4"
+}
+----
+
+==== Unanchored Automatic Index
+
+Sometimes you want to have indexes assigned automatically to come at the end.
+This can be useful when defining <<Mixins>> with positional parameters.
+
+To accomplish this, specify an index with a `+` character to indicate that picocli should automatically assign indexes that come at the end.
+For example:
+
+[source,java]
+----
+class Unanchored {
+    @Parameters(index = "0") String p0;
+    @Parameters(index = "1+") String p1; // assigned index = "1"
+    @Parameters(index = "1+") String p2; // assigned index = "2"
+    @Parameters(index = "3") String p3;
+    @Parameters(index = "+") String p4; // assigned index = "4" <-- unanchored
+    @Parameters(index = "+") String p5; // assigned index = "5" <-- unanchored
+}
+----
+
+==== Do Not Combine Unanchored Indexes with Open-ended Indexes
+
+It is not possible to combine unanchored indexes (`+`) with open-ended explicit indexes (`*`):
+the parameter with the open-ended index will capture all arguments, and there is no position "after the other indexes" that can be assigned.
+
+The below example will always give a `Missing required parameter: <last>` error:
+
+[source,java]
+----
+class BadCombination {
+    @Parameters(index = "0..*") List<String> all;
+    @Parameters(index = "+") String last;
+}
+----
+
+
+=== Improved Support for Chinese, Japanese and Korean
+Picocli will align the usage help message to fit within some user-defined width (80 columns by default).
+A number of characters in Chinese, Japanese and Korean (CJK) are wider than others.
+If those characters are treated to have the same width as other characters, the usage help message may extend past the right margin.
+
+From 4.0, picocli will use 2 columns for these wide characters when calculating where to put line breaks, resulting in better usage help message text.
+
+This can be switched off with `CommandLine.setAdjustLineBreaksForWideCJKCharacters(false)`.
 
 === Boolean Options with Parameters
 By default the value of a boolean field is set to the logical negative of its default value when the option is specified on the command line.
@@ -5460,6 +6065,23 @@ Generally, many applications use options for optional values and parameters for 
 However, picocli lets you make options required if you want to, see <<Required Arguments>>.
 
 
+=== Text Blocks for Java 15
+
+When writing your command line program, you can use Java 15's new "Text Block" feature.
+Multi-line text blocks can be used in command and option descriptions, headers and footers.
+
+[source,java]
+----
+@Option(names = { "-v", "--verbose" },
+  description = """
+                Verbose mode. Helpful for troubleshooting.
+                Multiple -v options increase the verbosity.
+                """) // write description in text block
+----
+
+For more details, see https://www.infoq.com/articles/java-text-blocks/[this article] by Java Language Architect Brian Goetz.
+
+
 == Dependency Injection
 
 === Guice Example
@@ -5528,14 +6150,14 @@ Maven:
 <dependency>
   <groupId>info.picocli</groupId>
   <artifactId>picocli-spring-boot-starter</artifactId>
-  <version>4.2.1-SNAPSHOT</version>
+  <version>4.3.3-SNAPSHOT</version>
 </dependency>
 ```
 
 Gradle:
 ```
 dependencies {
-    compile "info.picocli:picocli-spring-boot-starter:4.2.1-SNAPSHOT"
+    compile "info.picocli:picocli-spring-boot-starter:4.3.3-SNAPSHOT"
 }
 ```
 
@@ -5670,6 +6292,104 @@ public class MyMicronautApp implements Runnable {
     }
 }
 ----
+
+=== CDI 2.0 (JSR 365)
+If your application runs in a dependency injection container that does not offer explicit support for picocli, it may still be possible to get dependency injection in your picocli commands, subcommands and other classes like version providers, default providers, type converters, etc.
+
+In essence, all that is needed is an implementation of the `picocli.CommandLine.IFactory` interface that gets objects from the dependency injection container instead of instantiating them directly.
+
+Below is an example CDI factory that works for any container that implements the https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html[Contexts and Dependency Injection for Java 2.0] specification (JSR 365).
+
+[source,java]
+----
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Instance;
+import javax.enterprise.inject.spi.CDI;
+
+import picocli.CommandLine;
+import picocli.CommandLine.IFactory;
+
+/**
+ * Factory used by picocli to look up subcommands and other classes
+ * in the CDI container before instantiating them directly,
+ * to support dependency injection in subcommands and other classes.
+ */
+@ApplicationScoped
+public class CDIFactory implements IFactory {
+
+    private final IFactory fallbackFactory = CommandLine.defaultFactory();
+
+    @Override
+    public <K> K create(Class<K> cls) throws Exception {
+        Instance<K> instance = CDI.current().select(cls);
+        if (instance.isResolvable()) {
+            return instance.get();
+        }
+        return defaultFactory.create(cls);
+    }
+}
+----
+
+How to use the above factory depends on the specific container, but in general it would look something like the below:
+
+[source,java]
+----
+@Command(name = "cdi-app", mixinStandardHelpOptions = true)
+class MyCDIApp implements Runnable {
+
+    @Option(names = {"-x", "--option"}, description = "example option")
+    boolean flag;
+
+    @Override
+    public void run() {
+        // business logic
+    }
+
+    public static void main(String[] args) {
+        CDIFactory cdiFactory = CDI.current().select(CDIFactory.class).get();
+        new CommandLine(MyCDIApp.class, cdiFactory).execute(args);
+    }
+}
+----
+
+=== Quarkus Example
+image:https://quarkus.io/assets/images/quarkus_logo_horizontal_rgb_600px_reverse.png[Quarkus Logo,width=350,bg=black]
+
+Quarkus 1.4 added support for https://quarkus.io/guides/command-mode-reference[Command Mode] applications, which allows for using picoli in Quarkus applications.
+
+The example below shows how an application could use the `CDIFactory` introduced in the <<CDI 2.0 (JSR 365),previous section>> to get dependency injection in subcommands and other classes like version providers, default providers, type converters, etc.
+
+NOTE: As of this writing, there is work in progress in the Quarkus community on a picocli extension for Quarkus that will give applications more compact code, more features, and other benefits than the example below.
+
+[source,java]
+----
+import io.quarkus.runtime.QuarkusApplication;
+import io.quarkus.runtime.annotations.QuarkusMain;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+
+@QuarkusMain
+@ApplicationScoped
+@Command(name = "quarkus-app", mixinStandardHelpOptions = true)
+public class MyQuarkusApp implements Runnable, QuarkusApplication {
+    @Inject
+    CDIFactory cdiFactory; // see previous section
+
+    @Override
+    public void run() {
+        // business logic
+    }
+
+    @Override
+    public int run(String... args) {
+        return new CommandLine(this, cdiFactory).execute(args);
+    }
+}
+----
+
 
 
 == Java 9 JPMS Modules
@@ -6030,14 +6750,15 @@ Use `jlink` with the `--launcher` option to generate launcher scripts for your a
 
 See https://medium.com/azulsystems/using-jlink-to-build-java-runtimes-for-non-modular-applications-9568c5e70ef4[this article] for using jlink for non-modular applications.
 
-=== jpackage (Early Access)
-https://jdk.java.net/jpackage/[jpackage] is an early access build of https://openjdk.java.net/jeps/343[JEP 343: Packaging Tool].
+=== jpackage
+jpackage is a packaging tool according to https://openjdk.java.net/jeps/343[JEP 343] which ships with JDK 14. 
 JPackage can take the custom light-weight JRE produced by `jlink` and create an installer and a native application launcher.
 The result is a Java "application image" that is a single directory in the filesystem containing
 the native application launcher, resources and configuration files,
 and the custom light-weight JRE runtime image (including the application modules) produced by `jlink`.
 
-This https://www.infoq.com/news/2019/03/jep-343-jpackage/[InfoQ article] has more details.
+For further details, you may read the https://docs.oracle.com/en/java/javase/14/docs/specs/man/jpackage.html[jpackage synopsis] or study the https://docs.oracle.com/en/java/javase/14/jpackage/[Packaging Tool User's Guide].
+This https://www.infoq.com/news/2019/03/jep-343-jpackage/[InfoQ article] may be of interest, too.
 Gradle users may like these plugins: https://badass-runtime-plugin.beryx.org/releases/latest/[org.beryx Badass Runtime Plugin]
 and https://badass-jlink-plugin.beryx.org/releases/latest/[org.beryx Badass JLink Plugin].
 
@@ -6053,6 +6774,7 @@ This https://asciinema.org/a/AVwA19yijKRNKEO0bJENN2ME3?autoplay=true&speed=2[asc
 Picocli may be used in other JVM languages that support annotations.
 
 === Groovy
+==== Groovy Annotation Syntax
 In Groovy, use `[` and `]` to surround array values, instead of the `{` and `}` used in Java.
 
 [source,groovy]
@@ -6076,6 +6798,7 @@ class MyApp implements Runnable {
 }
 ----
 
+==== Groovy Scripts
 Picocli 2.0 introduced special support for Groovy scripts. (From picocli 4.0 this was moved into a separate module, `picocli-groovy`.)
 
 Scripts annotated with `@picocli.groovy.PicocliScript` are automatically transformed to use
@@ -6088,7 +6811,8 @@ The script body is executed if the user input was valid and did not request usag
 
 [source,groovy]
 ----
-@Grab('info.picocli:picocli-groovy:4.2.1-SNAPSHOT')
+@Grab('info.picocli:picocli-groovy:4.3.3-SNAPSHOT')
+@GrabConfig(systemClassLoader=true)
 @Command(name = "myScript",
         mixinStandardHelpOptions = true, // add --help and --version options
         description = "@|bold Groovy script|@ @|underline picocli|@ example")
@@ -6109,16 +6833,16 @@ assert this.commandLine.commandName == "myScript"
 ----
 
 WARNING: When upgrading scripts to picocli 4.0, just changing the version number is not enough!
-Scripts should use `@Grab('info.picocli:picocli-groovy:4.2.1-SNAPSHOT')`. The old artifact id `@Grab('info.picocli:picocli:4.2.1-SNAPSHOT')` will not work,
+Scripts should use `@Grab('info.picocli:picocli-groovy:4.3.3-SNAPSHOT')`. The old artifact id `@Grab('info.picocli:picocli:4.3.3-SNAPSHOT')` will not work,
 because the `@picocli.groovy.PicocliScript` annotation class and supporting classes have been moved into a separate module, `picocli-groovy`.
 
-
+==== Older Versions of Groovy
 NOTE: When using a Groovy version older than 2.4.7, use this workaround for the https://issues.apache.org/jira/browse/GROOVY-7613[Grape bug] that causes this error:
 `java.lang.ClassNotFoundException: # Licensed to the Apache Software Foundation (ASF) under one or more`.
 
 [source,groovy]
 ----
-@Grab('info.picocli:picocli-groovy:4.2.1-SNAPSHOT')
+@Grab('info.picocli:picocli-groovy:4.3.3-SNAPSHOT')
 @GrabExclude('org.codehaus.groovy:groovy-all') // work around GROOVY-7613
 ...
 ----
@@ -6127,6 +6851,7 @@ In order to get you started quickly, you may have a look at the https://github.c
 
 === Kotlin
 
+==== Kotlin Annotation Syntax
 Kotlin 1.2 (released Nov 28, 2017) officially supports http://kotlinlang.org/docs/reference/whatsnew12.html#array-literals-in-annotations[array literals in annotations], allowing a more compact notation:
 
 [source,kotlin]
@@ -6165,6 +6890,7 @@ class SubCmd { // ...
 }
 ----
 
+==== Older Versions of Kotlin
 Kotlin versions prior to 1.2 did not allow the https://kotlinlang.org/docs/reference/annotations.html[array literal syntax in annotations], so with older versions of Kotlin you will have to write `arrayOf(...)` for the `names`, `description` and `type` attributes.
 
 [source,kotlin]
@@ -6257,7 +6983,7 @@ See the <<Source,source code>> below. Copy and paste it into a file called `Comm
 
 === Gradle
 ----
-compile 'info.picocli:picocli:4.2.1-SNAPSHOT'
+compile 'info.picocli:picocli:4.3.3-SNAPSHOT'
 ----
 
 === Maven
@@ -6265,19 +6991,19 @@ compile 'info.picocli:picocli:4.2.1-SNAPSHOT'
 <dependency>
   <groupId>info.picocli</groupId>
   <artifactId>picocli</artifactId>
-  <version>4.2.1-SNAPSHOT</version>
+  <version>4.3.3-SNAPSHOT</version>
 </dependency>
 ----
 
 === Scala SBT
 ----
-libraryDependencies += "info.picocli" % "picocli" % "4.2.1-SNAPSHOT"
+libraryDependencies += "info.picocli" % "picocli" % "4.3.3-SNAPSHOT"
 ----
 
 === Ivy
 
 ----
-<dependency org="info.picocli" name="picocli" rev="4.2.1-SNAPSHOT" />
+<dependency org="info.picocli" name="picocli" rev="4.3.3-SNAPSHOT" />
 ----
 
 === Source

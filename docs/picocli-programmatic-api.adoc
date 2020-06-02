@@ -1,7 +1,7 @@
 = Programmatic API
 //:author: Remko Popma
 //:email: rpopma@apache.org
-:revnumber: 4.2.1-SNAPSHOT
+:revnumber: 4.3.3-SNAPSHOT
 :revdate: 2019-11-29
 :toc: left
 :numbered:
@@ -106,7 +106,7 @@ cmd.usageMessage()
         .descriptionHeading("Description heading%n")
         .description("description line 1", "description line 2")
         .optionListHeading("Options%n")
-        .parameterListHeading("Positional Parameters%n");
+        .parameterListHeading("Positional Parameters%n")
         .footerHeading("Footer heading%n")
         .footer("footer line 1", "footer line 2");
 ----

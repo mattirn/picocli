@@ -165,10 +165,11 @@ public class MixinTest {
         class Receiver {
             @Mixin Invalid mixMeIn;
         }
+        Receiver userObject = new Receiver();
         try {
-            new CommandLine(new Receiver(), new InnerClassFactory(this));
+            new CommandLine(userObject, new InnerClassFactory(this));
         } catch (InitializationException ex) {
-            assertEquals(Invalid.class.getName() + " is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ex.getMessage());
+            assertEquals(userObject.mixMeIn + " is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ex.getMessage());
         }
     }
 
@@ -177,11 +178,12 @@ public class MixinTest {
         class Invalid {}
         @Command class Receiver {}
 
+        Invalid mixin = new Invalid();
         CommandLine commandLine = new CommandLine(new Receiver());
         try {
-            commandLine.addMixin("invalid", new Invalid());
+            commandLine.addMixin("invalid", mixin);
         } catch (InitializationException ex) {
-            assertEquals(Invalid.class.getName() + " is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ex.getMessage());
+            assertEquals(mixin + " is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ex.getMessage());
         }
     }
 
@@ -1048,4 +1050,28 @@ public class MixinTest {
         assertSame(myApp, myApp.verbosityMixin.commandSpec.userObject());
     }
 
+    @Command(usageHelpWidth = 123 )
+    static class MixinWidth {}
+
+    @Test
+    public void testMixinWidth() {
+        class MyApp {
+            @Mixin
+            MixinWidth mixin;
+        }
+        CommandLine cmd = new CommandLine(new MyApp());
+        assertEquals(123, cmd.getCommandSpec().usageMessage().width());
+    }
+
+    @Test
+    public void testMixinLongOptionsMaxWidth() {
+        CommandSpec spec = CommandSpec.create();
+        assertNotEquals(43, spec.usageMessage().longOptionsMaxWidth());
+        spec.usageMessage().longOptionsMaxWidth(43);
+
+        CommandSpec another = CommandSpec.create();
+        another.addMixin("a", spec);
+
+        assertEquals(43, another.usageMessage().longOptionsMaxWidth());
+    }
 }

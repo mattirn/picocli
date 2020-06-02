@@ -179,13 +179,27 @@ public class ArityTest {
     }
 
     @Test
-    public void testParameterIndex_WhenUndefined() throws Exception {
+    public void testParameterIndex_WhenUndefinedSingleValue() throws Exception {
         class ImplicitBoolField { @Parameters boolean boolSingleValue; }
-        Range arity = Range.parameterIndex(ImplicitBoolField.class.getDeclaredField("boolSingleValue"));
-        assertEquals(Integer.MAX_VALUE, arity.max());
-        assertEquals(0, arity.min());
-        assertEquals(true, arity.isVariable());
-        assertEquals("0..*", arity.toString());
+        Range index = Range.parameterIndex(ImplicitBoolField.class.getDeclaredField("boolSingleValue"));
+        assertEquals(0, index.max());
+        assertEquals(0, index.min());
+        assertEquals(false, index.isVariable());
+        assertEquals("0", index.toString());
+        assertEquals("0+ (0)", index.internalToString());
+        assertEquals(true, index.isRelative());
+        assertEquals(true, index.isRelativeToAnchor());
+        assertEquals(0, index.anchor());
+    }
+
+    @Test
+    public void testParameterIndex_WhenUndefinedMultiValue() throws Exception {
+        class ImplicitBoolArrayField { @Parameters boolean[] boolMultiValue; }
+        Range index = Range.parameterIndex(ImplicitBoolArrayField.class.getDeclaredField("boolMultiValue"));
+        assertEquals(Integer.MAX_VALUE, index.max());
+        assertEquals(0, index.min());
+        assertEquals(true, index.isVariable());
+        assertEquals("0..*", index.toString());
     }
 
     @Test
@@ -460,7 +474,7 @@ public class ArityTest {
             CommandLine.populateCommand(new Example(), new String[0]);
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <mandatory>", ex.getMessage());
+            assertEquals("Missing required parameter: '<mandatory>'", ex.getMessage());
             assertEquals(1, ex.getMissing().size());
             assertEquals("<mandatory>", ex.getMissing().get(0).paramLabel());
         }
@@ -476,13 +490,13 @@ public class ArityTest {
             CommandLine.populateCommand(new Tricky1(), new String[0]);
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: <mandatory>, <anotherMandatory>", ex.getMessage());
+            assertEquals("Missing required parameters: '<mandatory>', '<anotherMandatory>'", ex.getMessage());
         }
         try {
             CommandLine.populateCommand(new Tricky1(), new String[] {"firstonly"});
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <anotherMandatory>", ex.getMessage());
+            assertEquals("Missing required parameter: '<anotherMandatory>'", ex.getMessage());
         }
     }
     @Test
@@ -499,7 +513,7 @@ public class ArityTest {
             CommandLine.populateCommand(new Tricky2(), new String[0]);
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <mandatory>", ex.getMessage());
+            assertEquals("Missing required parameter: '<mandatory>'", ex.getMessage());
         }
     }
     @Test
@@ -514,14 +528,14 @@ public class ArityTest {
             CommandLine.populateCommand(new Tricky3(), new String[] {"-t", "-v", "mandatory"});
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <alsoMandatory>", ex.getMessage());
+            assertEquals("Missing required parameter: '<alsoMandatory>'", ex.getMessage());
         }
 
         try {
             CommandLine.populateCommand(new Tricky3(), new String[] { "-t", "-v"});
             fail("Should not accept missing two mandatory parameters");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: <mandatory>, <alsoMandatory>", ex.getMessage());
+            assertEquals("Missing required parameters: '<mandatory>', '<alsoMandatory>'", ex.getMessage());
         }
     }
     @Test
@@ -534,7 +548,7 @@ public class ArityTest {
             CommandLine.populateCommand(new Tricky3(), new String[] {"-t"});
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <mandatory>", ex.getMessage());
+            assertEquals("Missing required parameter: '<mandatory>'", ex.getMessage());
         }
     }
     @Test
@@ -554,7 +568,7 @@ public class ArityTest {
             CommandLine.populateCommand(new App(), new String[0]);
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: <host>, <port>", ex.getMessage());
+            assertEquals("Missing required parameters: '<host>', '<port>'", ex.getMessage());
         }
     }
     @Test
@@ -574,7 +588,7 @@ public class ArityTest {
             CommandLine.populateCommand(new App(), new String[0]);
             fail("Should not accept missing mandatory parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: HOST, PORT", ex.getMessage());
+            assertEquals("Missing required parameters: 'HOST', 'PORT'", ex.getMessage());
         }
     }
 
@@ -792,8 +806,8 @@ public class ArityTest {
         Sample sample2 = CommandLine.populateCommand(new Sample(), "--unit"); // no arguments
         assertEquals("optional option is empty string when specified without args", TimeUnit.SECONDS, sample2.unit);
 
-        Sample sample3 = CommandLine.populateCommand(new Sample(), "--unit", "MINUTES"); // no arguments
-        assertEquals("optional option has value when specified", TimeUnit.MINUTES, sample3.unit);
+        Sample sample3 = CommandLine.populateCommand(new Sample(), "--unit", "MILLISECONDS"); // no arguments
+        assertEquals("optional option has value when specified", TimeUnit.MILLISECONDS, sample3.unit);
     }
     @Test
     public void testListFieldOptionalParamWithFallback_280() {
@@ -1060,7 +1074,7 @@ public class ArityTest {
             params = CommandLine.populateCommand(new ArrayParamsArity1_n());
             fail("Should not accept input with missing parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <params>", ex.getMessage());
+            assertEquals("Missing required parameter: '<params>'", ex.getMessage());
         }
     }
 
@@ -1113,7 +1127,7 @@ public class ArityTest {
             CommandLine.populateCommand(new App(), "a");
             fail("Should not accept input with missing parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameters: PARAM2, PARAM3", ex.getMessage());
+            assertEquals("Missing required parameters: 'PARAM2', 'PARAM3'", ex.getMessage());
         }
     }
 
@@ -1179,7 +1193,7 @@ public class ArityTest {
             params = CommandLine.populateCommand(new NonVarArgArrayParamsArity1());
             fail("Should not accept input with missing parameter");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <params>", ex.getMessage());
+            assertEquals("Missing required parameter: '<params>'", ex.getMessage());
         }
     }
 
@@ -1229,7 +1243,7 @@ public class ArityTest {
             CommandLine.populateCommand(new Arg(), "-o", "v1", "-o", "v2");
             fail("Expected MissingParameterException");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <parameters>", ex.getMessage());
+            assertEquals("Missing required parameter: '<parameters>'", ex.getMessage());
         }
     }
 

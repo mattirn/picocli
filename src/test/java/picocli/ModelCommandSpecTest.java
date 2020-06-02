@@ -101,7 +101,7 @@ public class ModelCommandSpecTest {
         try {
             commandLine.parseArgs();
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '-x=PARAM'", ex.getMessage());
+            assertEquals("Missing required option: '-x=PARAM'", ex.getMessage());
             assertEquals(1, ex.getMissing().size());
             assertSame(ex.getMissing().get(0).toString(), parent.posixOptionsMap().get('x'), ex.getMissing().get(0));
         }
@@ -487,11 +487,12 @@ public class ModelCommandSpecTest {
 
     @Test
     public void testCommandSpec_forAnnotatedObject_requiresPicocliAnnotation() {
+        Object userObject = new Object();
         try {
-            CommandSpec.forAnnotatedObject(new Object());
+            CommandSpec.forAnnotatedObject(userObject);
             fail("Expected error");
         } catch (InitializationException ok) {
-            assertEquals("java.lang.Object is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ok.getMessage());
+            assertEquals(userObject + " is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", ok.getMessage());
         }
     }
 
@@ -1466,5 +1467,37 @@ public class ModelCommandSpecTest {
         assertEquals(2, specElements.size());
         assertEquals("spec1", specElements.get(0).getName());
         assertEquals("spec2", specElements.get(1).getName());
+    }
+
+    @Test
+    public void testUsageMessageFromProgrammaticCommandSpec() {
+        CommandSpec spec = CommandSpec.create();
+        spec.addOption(OptionSpec.builder("-x").splitRegex("").build());
+        spec.addPositional(PositionalParamSpec.builder().splitRegex("").build());
+        spec.mixinStandardHelpOptions(true);
+        String actual = new CommandLine(spec).getUsageMessage(Ansi.OFF);
+        String expected = String.format("" +
+                "Usage: <main class> [-hVx] PARAM%n" +
+                "      PARAM%n" +
+                "  -h, --help      Show this help message and exit.%n" +
+                "  -V, --version   Print version information and exit.%n" +
+                "  -x%n");
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testUsageMessageFromProgrammaticCommandSpecWithSplitRegexSynopsisLabel() {
+        CommandSpec spec = CommandSpec.create();
+        spec.addOption(OptionSpec.builder("-x").type(String[].class).splitRegex("").splitRegexSynopsisLabel(";").build());
+        spec.addPositional(PositionalParamSpec.builder().type(String[].class).splitRegex("").splitRegexSynopsisLabel(";").build());
+        spec.mixinStandardHelpOptions(true);
+        String actual = new CommandLine(spec).getUsageMessage(Ansi.OFF);
+        String expected = String.format("" +
+                "Usage: <main class> [-hV] [-x=PARAM]... PARAM...%n" +
+                "      PARAM...%n" +
+                "  -h, --help      Show this help message and exit.%n" +
+                "  -V, --version   Print version information and exit.%n" +
+                "  -x=PARAM%n");
+        assertEquals(expected, actual);
     }
 }

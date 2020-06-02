@@ -43,6 +43,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
@@ -90,6 +91,23 @@ public class ExecuteTest {
         String[] args = { "abc" };
         verifyAllFail(factory, "Parsed command (picocli.ExecuteTest$",
                 ") is not a Method, Runnable or Callable", args);
+    }
+
+    @Test
+    public void testExecutionStrategyRunXxxWithSubcommandsFailsWithMissingSubcommandIfNotRunnableOrCallable() {
+        @Command class App {
+            @Parameters String[] params;
+            @Command void sub() {}
+        }
+        int exitCode = new CommandLine(new App()).execute("abc");
+        assertEquals(2, exitCode);
+        String expected = String.format("" +
+                "Missing required subcommand%n" +
+                "Usage: <main class> [<params>...] [COMMAND]%n" +
+                "      [<params>...]%n" +
+                "Commands:%n" +
+                "  sub%n");
+        assertEquals(expected, systemErrRule.getLog());
     }
 
     @Test
@@ -375,6 +393,9 @@ public class ExecuteTest {
             "  @|yellow -V|@, @|yellow --version|@   Print version information and exit.%n" +
             "  @|yellow -x|@=@|italic <option>|@     this is an option%n")).toString();
 
+    private static final String INVALID_INPUT_ANSI = Help.Ansi.ON.new Text(format("" +
+            "@|fg(red),bold Unmatched argument at index 0: 'invalid input'|@%n")).toString();
+
     @Test
     public void testExecuteWithInvalidInput() {
         int exitCode = new CommandLine(new MyCallable()).execute("invalid input");
@@ -387,7 +408,7 @@ public class ExecuteTest {
     public void testExecuteWithInvalidInput_Ansi_ON() {
         new CommandLine(new MyCallable())
                 .setColorScheme(Help.defaultColorScheme(Help.Ansi.ON)).execute("invalid input");
-        assertEquals(INVALID_INPUT + MYCALLABLE_USAGE_ANSI, systemErrRule.getLog());
+        assertEquals(INVALID_INPUT_ANSI + MYCALLABLE_USAGE_ANSI, systemErrRule.getLog());
         assertEquals("", systemOutRule.getLog());
     }
 
@@ -397,7 +418,7 @@ public class ExecuteTest {
                 .setErr(new PrintWriter(System.out, true))
                 .setColorScheme(Help.defaultColorScheme(Help.Ansi.ON)).execute("invalid input");
         assertEquals("", systemErrRule.getLog());
-        assertEquals(INVALID_INPUT + MYCALLABLE_USAGE_ANSI, systemOutRule.getLog());
+        assertEquals(INVALID_INPUT_ANSI + MYCALLABLE_USAGE_ANSI, systemOutRule.getLog());
     }
 
     @Test
@@ -850,7 +871,7 @@ public class ExecuteTest {
         //        "\tat picocli.CommandLine$Interpreter.parse(CommandLine.java:11349)%n" +
         //        "\tat picocli.CommandLine.parseArgs(CommandLine.java:1311)%n" +
         //        "\tat picocli.CommandLine.execute(CommandLine.java:1907)%n" +
-        //        "\tat picocli.ExecuteTest.testParameterExceptionHandler_ShowsStacktraceIfTracingDebug(ExecuteTest.java:826)%n" +
+        //        "\tat picocli.ExecuteTest.testParameterExceptionHandler_ShowsStacktraceIfTracingDebug(UsageSplitTest.java:826)%n" +
         //        "\tat sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)%n" +
         //        "\tat sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)%n" +
         //        "\tat sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)%n" +
@@ -1429,5 +1450,125 @@ public class ExecuteTest {
     @Test(expected = NullPointerException.class)
     public void testKeyValuesMapDisallowsNullValues() {
         keyValuesMap(null, null);
+    }
+
+    @Command
+    static class Issue1048 implements Runnable {
+        public void run() {
+            try {
+                throw new IOException("Bad IO!");
+            } catch (IOException ioe) {
+                try {
+                    throw new Exception("I may have caught something", ioe);
+                } catch (Exception ex) {
+                    try {
+                        throw new IllegalStateException("What state is this?", ex);
+                    } catch (IllegalStateException interruptedException) {
+                        throw new RuntimeException("not running any more...", interruptedException);
+                    }
+                }
+            }
+        }
+    }
+    @Test
+    public void testIssue1048CauseExceptionWithoutANSI() {
+        System.setProperty("picocli.ansi", "false");
+        new CommandLine(new Issue1048()).execute();
+
+        List<String> lines = getSystemErrLines();
+
+        assertEquals("java.lang.RuntimeException: not running any more...", lines.get(0));
+        assertEquals("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)", lines.get(1));
+
+        String[] expected = {
+                "Caused by: java.lang.IllegalStateException: What state is this?",
+                "\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)",
+                "\t... some more",
+                "Caused by: java.lang.Exception: I may have caught something",
+                "\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)",
+                "\t... some more",
+                "Caused by: java.io.IOException: Bad IO!",
+                "\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)",
+                "\t... some more",
+        };
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], lines.get(lines.size() - (expected.length - i)));
+        }
+    }
+
+    private List<String> getSystemErrLines() {
+        Scanner scanner = new Scanner(systemErrRule.getLog());
+        List<String> lines = new ArrayList<String>();
+        while (scanner.hasNextLine()) {
+            lines.add(scanner.nextLine()
+                    .replaceAll("java:\\d+\\)", "java)") // strip out line numbers
+                    .replaceAll("\\.\\.\\. \\d+ more", "... some more") // strip out exact line count
+            );
+        }
+        return lines;
+    }
+
+    @Test
+    public void testIssue1048CauseExceptionWithANSI() {
+        System.setProperty("picocli.ansi", "true");
+
+        CommandLine commandLine = new CommandLine(new Issue1048());
+        commandLine.execute();
+        Help.ColorScheme colorScheme = commandLine.getColorScheme();
+
+        List<String> lines = getSystemErrLines();
+
+        assertEquals(colorScheme.errorText("java.lang.RuntimeException: not running any more..."), lines.get(0));
+        assertEquals(colorScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)"), lines.get(1));
+
+        String[] expected = {
+                colorScheme.errorText("Caused by: java.lang.IllegalStateException: What state is this?").toString(),
+                colorScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                colorScheme.stackTraceText("\t... some more").toString(),
+                colorScheme.errorText("Caused by: java.lang.Exception: I may have caught something").toString(),
+                colorScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                colorScheme.stackTraceText("\t... some more").toString(),
+                colorScheme.errorText("Caused by: java.io.IOException: Bad IO!").toString(),
+                colorScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                colorScheme.stackTraceText("\t... some more").toString(),
+        };
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], lines.get(lines.size() - (expected.length - i)));
+        }
+    }
+
+    @Test
+    public void testIssue1048CauseExceptionWithCustomColorScheme() {
+        System.setProperty("picocli.ansi", "true");
+
+        CommandLine commandLine = new CommandLine(new Issue1048());
+        Help.ColorScheme existing = commandLine.getColorScheme();
+        Help.ColorScheme customScheme = new Help.ColorScheme.Builder(existing)
+                .errors(Help.Ansi.Style.bg_magenta)
+                .stackTraces(Help.Ansi.Style.bg_blue)
+                .build();
+        commandLine.setColorScheme(customScheme);
+
+        commandLine.execute();
+
+        List<String> lines = getSystemErrLines();
+
+        assertEquals(customScheme.errorText("java.lang.RuntimeException: not running any more..."), lines.get(0));
+        assertEquals(customScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)"), lines.get(1));
+
+        String[] expected = {
+                customScheme.errorText("Caused by: java.lang.IllegalStateException: What state is this?").toString(),
+                customScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                customScheme.stackTraceText("\t... some more").toString(),
+                customScheme.errorText("Caused by: java.lang.Exception: I may have caught something").toString(),
+                customScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                customScheme.stackTraceText("\t... some more").toString(),
+                customScheme.errorText("Caused by: java.io.IOException: Bad IO!").toString(),
+                customScheme.stackTraceText("\tat picocli.ExecuteTest$Issue1048.run(ExecuteTest.java)").toString(),
+                customScheme.stackTraceText("\t... some more").toString(),
+        };
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], lines.get(lines.size() - (expected.length - i)));
+        }
     }
 }

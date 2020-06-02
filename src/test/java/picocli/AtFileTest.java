@@ -1,5 +1,6 @@
 package picocli;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.ProvideSystemProperty;
@@ -9,6 +10,7 @@ import org.junit.rules.TestRule;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.ParseResult;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -723,7 +725,6 @@ public class AtFileTest {
                 "      [@<filename>...]   One or more argument files containing options.%n" +
                 "");
         assertEquals(expected, actual);
-        commandLine.usage(System.out);
     }
 
     @Test
@@ -755,4 +756,47 @@ public class AtFileTest {
         assertEquals(expected, actual);
     }
 
+    @Test
+    public void testAtFileParameterListHeadingShownIfNoOtherPositionalParameters() {
+        @Command(name = "A", mixinStandardHelpOptions = true,
+                showAtFileInUsageHelp = true,
+                parameterListHeading = "Parameters:%n",
+                optionListHeading = "Options:%n",
+                description = "... description ...")
+        class A { }
+
+        String actual = new CommandLine(new A()).getUsageMessage();
+        String expected = String.format("" +
+                "Usage: A [-hV] [@<filename>...]%n" +
+                "... description ...%n" +
+                "Parameters:%n" +
+                "      [@<filename>...]   One or more argument files containing options.%n" +
+                "Options:%n" +
+                "  -h, --help             Show this help message and exit.%n" +
+                "  -V, --version          Print version information and exit.%n");
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAtFileExpandedArgsParsed() {
+        class App {
+            @Option(names = "-v")
+            private boolean verbose;
+
+            @Parameters
+            private List<String> files;
+        }
+        File file = findFile("/argfile1.txt");
+        if (!file.getAbsolutePath().startsWith(System.getProperty("user.dir"))) {
+            return;
+        }
+        String relative = file.getAbsolutePath().substring(System.getProperty("user.dir").length());
+        if (relative.startsWith(File.separator)) {
+            relative = relative.substring(File.separator.length());
+        }
+        CommandLine commandLine = new CommandLine(new App());
+        ParseResult parseResult = commandLine.parseArgs(new String[] {"@" + relative});
+
+        assertEquals(Arrays.asList("1111", "-v", "2222", ";3333"), parseResult.expandedArgs());
+    }
 }

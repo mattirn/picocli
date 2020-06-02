@@ -73,7 +73,7 @@ The user manual has an [example](https://picocli.info/#_guice_example) of integr
 
 ### Releases
 * [All Releases](https://github.com/remkop/picocli/releases)
-* Latest: 4.2.0 [Release Notes](https://github.com/remkop/picocli/releases/tag/v4.2.0)
+* Latest: 4.3.2 [Release Notes](https://github.com/remkop/picocli/releases/tag/v4.3.2)
 * Older: Picocli 4.0 [Release Notes](https://github.com/remkop/picocli/releases/tag/v4.0.0)
 * Older: Picocli 3.0 [Release Notes](https://github.com/remkop/picocli/releases/tag/v3.0.0)
 * Older: Picocli 2.0 [Release Notes](https://github.com/remkop/picocli/releases/tag/v2.0.0)
@@ -97,6 +97,7 @@ The user manual has an [example](https://picocli.info/#_guice_example) of integr
 
 ### Articles & Presentations
 #### English
+* [Building Native Covid19 Tracker CLI using Java, PicoCLI & GraalVM](https://aboullaite.me/java-covid19-cli-picocli-graalvm/) (2020-05-11) by [Mohammed Aboullaite](https://aboullaite.me/author/mohammed/).
 * [Creating CLI tools with Scala, Picocli and GraalVM](https://medium.com/@takezoe/creating-cli-tools-with-scala-picocli-and-graalvm-ffde05bbd01d) (2020-03-09) by [Naoki Takezoe](https://twitter.com/takezoen)
 * [Building native Java CLIs with GraalVM, Picocli, and Gradle](https://medium.com/@mitch.seymour/building-native-java-clis-with-graalvm-picocli-and-gradle-2e8a8388d70d) (2020-03-08) by [Mitch Seymour](https://medium.com/@mitch.seymour)
 * [Build Great Native CLI Apps in Java with Graalvm and Picocli](https://www.infoq.com/articles/java-native-cli-graalvm-picocli/) (2020-03-07)
@@ -118,10 +119,15 @@ The user manual has an [example](https://picocli.info/#_guice_example) of integr
 #### русский
 * [Интерфейсы командной строки Java: picocli](https://habr.com/ru/company/otus/blog/419401/) (2018-08-06): Russian translation by [MaxRokatansky](https://habr.com/ru/users/MaxRokatansky/) of Dustin Marx' blog post.
 
+#### Español
+* [VIDEO] [Picocli - Spring Boot example](https://youtu.be/y9ayfjfrTF4) (2020-05-24) 7-minute quick introduction by Gonzalo H. Mendoza.
+
 #### Français
+* [Application mobile: Créez de superbes applications CLI natives en Java avec Graalvm et Picocli](https://seodigitalmarketing.net/application-mobile-creez-de-superbes-applications-cli-natives-en-java-avec-graalvm-et-picocli/) (2020-05-07) Translation of [Build Great Native CLI Apps in Java with Graalvm and Picocli](https://www.infoq.com/articles/java-native-cli-graalvm-picocli/) by [bouf1450](https://seodigitalmarketing.net/author/bouf1450/). 
 * [VIDEO] [Des applications en ligne de commande avec Picocli et GraalVM (N. Peters)](https://www.youtube.com/watch?v=8ENbMwkaFyk) (2019-05-07): 15 minute presentation by Nicolas Peters during Devoxx FR. Presentation slides are [available on GitHub](https://t.co/tXhtpTpAff?amp=1).
 
 #### 日本語
+* [Picocli + Kotlin + graalvm-native-image plugin でネイティブツールを作る](https://mike-neck.hatenadiary.com/entry/2020/04/24/090000) (2020-04-24) blog post by [mike-neck](https://mike-neck.hatenadiary.com/about) ([引きこもり持田](https://twitter.com/mike_neck) on Twitter).
 * [Javaのコマンドラインアプリケーション向けのフレームワーク、picocliで遊ぶ](https://kazuhira-r.hatenablog.com/entry/2020/03/07/013626) (2020-03-07) blog post by [かずひら](https://twitter.com/kazuhira_r).
 * [KuromojiのCLIコマンドとpicocliとGraalVM](https://blog.johtani.info/blog/2020/02/28/kuromoji-cli/) (2020-02-28) blog post by [@johtani](https://twitter.com/johtani).
 * [GraalVM, PicocliとJavaでときめくネイティブコマンドラインアプリを作ろう](https://remkop.github.io/presentations/20191123/) (2019-11-23) Slides for my presentation at Japan Java User Group's [JJUG CCC 2019 Fall](https://ccc2019fall.java-users.jp/) conference.
@@ -150,9 +156,23 @@ Join the [picocli Google group](https://groups.google.com/d/forum/picocli) if yo
 
 ## Adoption
 
-<img src="https://picocli.info/images/groovy-logo.png" height="50">  <img src="https://picocli.info/images/1x1.png" width="10"> <img src="http://micronaut.io/images/micronaut_mini_copy_tm.svg" height="50">  <img src="https://picocli.info/images/1x1.png" width="10"><img src="https://picocli.info/images/junit5logo-172x50.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10"> <img src="https://picocli.info/images/debian-logo-192x50.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10"> <img src="https://picocli.info/images/karate-logo.png" height="50" width="50"/>  <img src="https://picocli.info/images/checkstyle-logo-260x50.png" height="50"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/ballerina-logo.png" height="40"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/apache-hive-logo.png" height="50"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://hadoop.apache.org/hadoop-logo.jpg" height="50"><img src="https://picocli.info/images/1x1.png" width="10"> <img src="https://picocli.info/images/apache-ozone-logo.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/stackshare-logo.png" height="50"> <img src="https://ignite.apache.org/images/Ignite_tm_Logo_blk_RGB.svg" height="50"> <img src="https://camo.githubusercontent.com/501aae78d282faf7a904bbb92f46eb8d19445ad5/687474703a2f2f736c696e672e6170616368652e6f72672f7265732f6c6f676f732f736c696e672e706e67" height="50"> 
+<img src="https://picocli.info/images/groovy-logo.png" height="50">  <img src="https://picocli.info/images/1x1.png" width="10"> <img src="http://micronaut.io/images/micronaut_mini_copy_tm.svg" height="50">  <img src="https://picocli.info/images/1x1.png" width="10"><img src="https://picocli.info/images/junit5logo-172x50.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10"> <img src="https://picocli.info/images/debian-logo-192x50.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10"> 
+<img src="https://spring.io/images/spring-logo.svg" height="50">
+<img src="https://avatars0.githubusercontent.com/u/3299148?s=200&v=4" height="50">
+<img src="https://avatars3.githubusercontent.com/u/39734771?s=200&v=4" height="50">
+<img src="https://avatars3.githubusercontent.com/u/1453152?s=200&v=4" height="50">
+<img src="https://avatars1.githubusercontent.com/u/201120?s=200&v=4" height="50">
+<img src="https://avatars0.githubusercontent.com/u/6154722?s=200&v=4" height="50">
+<img src="https://avatars3.githubusercontent.com/u/453694?s=200&v=4" height="50">
+<img src="https://avatars0.githubusercontent.com/u/82592?s=200&v=4" height="50">
+<img src="https://avatars0.githubusercontent.com/u/9312489?s=200&v=4" height="50">
+<img src="https://avatars0.githubusercontent.com/u/59439283?s=200&v=4" height="50">
+<img src="https://avatars1.githubusercontent.com/u/4186383?s=200&v=4" height="50">
+<img src="http://download.redis.io/logocontest/82.png" height="50">
+<img src="https://picocli.info/images/karate-logo.png" height="50" width="50"/>  <img src="https://picocli.info/images/checkstyle-logo-260x50.png" height="50"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/ballerina-logo.png" height="40"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/apache-hive-logo.png" height="50"><img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://hadoop.apache.org/hadoop-logo.jpg" height="50"><img src="https://picocli.info/images/1x1.png" width="10"> <img src="https://picocli.info/images/apache-ozone-logo.png" height="50"> <img src="https://picocli.info/images/1x1.png" width="10">  <img src="https://picocli.info/images/stackshare-logo.png" height="50"> <img src="https://ignite.apache.org/images/Ignite_tm_Logo_blk_RGB.svg" height="50"> <img src="https://camo.githubusercontent.com/501aae78d282faf7a904bbb92f46eb8d19445ad5/687474703a2f2f736c696e672e6170616368652e6f72672f7265732f6c6f676f732f736c696e672e706e67" height="50"> 
 <img src="https://avatars1.githubusercontent.com/u/541152?s=200&v=4" height="50">  <img src="https://camo.qiitausercontent.com/ec81e80366e061c8488b25c013003267b7a578d4/68747470733a2f2f71696974612d696d6167652d73746f72652e73332e616d617a6f6e6177732e636f6d2f302f3939352f33323331306534352d303537332d383534322d373035652d6530313138643434323632302e706e67" height="50">
-<img src="https://spring.io/img/spring-by-pivotal.png" height="50">
+<img src="https://upserve.com/media/upserve-logo.svg" height="50">
+<img src="https://www.kloudtek.com/logo-dark.png" height="50">
 <img src="https://www.schemacrawler.com/images/schemacrawler_logo.svg" height="50">
 <img src="https://avatars1.githubusercontent.com/u/22600631?s=200&v=4" height="50">
 <img src="https://fisco-bcos-documentation.readthedocs.io/en/latest/_static/images/FISCO_BCOS_Logo.svg" height="50">
@@ -165,6 +185,8 @@ Join the [picocli Google group](https://groups.google.com/d/forum/picocli) if yo
 <img src="https://concord.walmartlabs.com/assets/img/logo.png" height="50">
 <img src="https://res-3.cloudinary.com/crunchbase-production/image/upload/c_lpad,h_120,w_120,f_auto,b_white,q_auto:eco/etxip1k2sx4sphvwgkdu" height="50">
 <img src="https://www.minecraftforge.net/forum/uploads/set_resources_2/4eeef9d314eb4c008c0f37dacad2cdd5_logo.svg" height="50">
+
+
 
 * Picocli is now part of Groovy. From Groovy 2.5, all Groovy command line tools are picocli-based, and picocli is the underlying parser for Groovy's [CliBuilder DSL](http://groovy-lang.org/dsls.html#_clibuilder). 
 * Picocli is now part of Micronaut. The Micronaut CLI has been rewritten with picocli, and Micronaut has dedicated support for running microservices [standalone with picocli](https://docs.micronaut.io/snapshot/guide/index.html#commandLineApps).
@@ -183,7 +205,7 @@ Join the [picocli Google group](https://groups.google.com/d/forum/picocli) if yo
 * [jbang](https://github.com/maxandersen/jbang) not only uses picocli internally, but also has a CLI template to generate an initial script: use `jbang --init=cli helloworld.java` to generate a sample picocli-enabled jbang script. See [asciinema](https://asciinema.org/a/AVwA19yijKRNKEO0bJENN2ME3?autoplay=true&speed=2). 
 
 
-<img src="https://picocli.info/images/downloads-202002.png">
+<img src="https://picocli.info/images/downloads-202004.png">
 
 Glad to see more people are using picocli. We must be doing something right. :-) 
 
@@ -193,9 +215,9 @@ If you like picocli, there are a few things you can do to help:
 * Upvote my [StackOverflow answer](https://stackoverflow.com/a/43780433/1446916) to "How do I parse command line arguments in Java?"
 * Tweet about picocli! What do you like about it? How has it helped you? How is it different from the alternatives?
 
-If you like picocli and your project is on GitHub, consider adding this badge to your README.md: [![picocli](https://img.shields.io/badge/picocli-4.2.0-green.svg)](https://github.com/remkop/picocli)
+If you like picocli and your project is on GitHub, consider adding this badge to your README.md: [![picocli](https://img.shields.io/badge/picocli-4.3.2-green.svg)](https://github.com/remkop/picocli)
 ```
-[![picocli](https://img.shields.io/badge/picocli-4.2.0-green.svg)](https://github.com/remkop/picocli)
+[![picocli](https://img.shields.io/badge/picocli-4.3.2-green.svg)](https://github.com/remkop/picocli)
 ```
 
 
@@ -283,35 +305,35 @@ See the [source code](https://github.com/remkop/picocli/blob/master/src/main/jav
 
 ### Gradle
 ```
-compile 'info.picocli:picocli:4.2.0'
+compile 'info.picocli:picocli:4.3.2'
 ```
 ### Maven
 ```
 <dependency>
   <groupId>info.picocli</groupId>
   <artifactId>picocli</artifactId>
-  <version>4.2.0</version>
+  <version>4.3.2</version>
 </dependency>
 ```
 ### Scala SBT
 ```
-libraryDependencies += "info.picocli" % "picocli" % "4.2.0"
+libraryDependencies += "info.picocli" % "picocli" % "4.3.2"
 ```
 ### Ivy
 ```
-<dependency org="info.picocli" name="picocli" rev="4.2.0" />
+<dependency org="info.picocli" name="picocli" rev="4.3.2" />
 ```
 ### Grape
 ```groovy
 @Grapes(
-    @Grab(group='info.picocli', module='picocli', version='4.2.0')
+    @Grab(group='info.picocli', module='picocli', version='4.3.2')
 )
 ```
 ### Leiningen
 ```
-[info.picocli/picocli "4.2.0"]
+[info.picocli/picocli "4.3.2"]
 ```
 ### Buildr
 ```
-'info.picocli:picocli:jar:4.2.0'
+'info.picocli:picocli:jar:4.3.2'
 ```

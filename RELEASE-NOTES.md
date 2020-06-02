@@ -1,26 +1,384 @@
 # picocli Release Notes
 
-# <a name="4.3.0"></a> Picocli 4.3.0 (UNRELEASED)
-The picocli community is pleased to announce picocli 4.3.0.
+# <a name="4.4.0"></a> Picocli 4.4.0 (UNRELEASED)
+The picocli community is pleased to announce picocli 4.4.0.
 
 This release contains bugfixes and enhancements.
 
-From this release, mixin classes can declare a `@Spec(Spec.Target.MIXEE)`-annotated field; the `CommandSpec` of the command _receiving_ this mixin (the "mixee") is injected into this field.
+From this release, picocli supports abbreviated options and subcommands. When abbreviations are enabled, users can specify the initial letter(s) of the first component and optionally of one or more subsequent components of an option or subcommand name.
+"Components" are separated by `-` dash characters or by case, so for example, both `--CamelCase` and `--kebab-case` have two components.
+
+Fixed a bug in argument group parsing where incorrect input with missing mandatory elements was accepted when an option was specified multiple times.
+
+This is the seventy-first public release.
+Picocli follows [semantic versioning](http://semver.org/).
+
+## <a name="4.4.0-toc"></a> Table of Contents
+* [New and noteworthy](#4.4.0-new)
+  * [Abbreviated Options and Subcommands](#4.4.0-abbreviated-options-and-commands)
+* [Fixed issues](#4.4.0-fixes)
+* [Deprecations](#4.4.0-deprecated)
+* [Potential breaking changes](#4.4.0-breaking-changes)
+
+## <a name="4.4.0-new"></a> New and Noteworthy
+
+### <a name="4.4.0-abbreviated-options-and-commands"></a> Abbreviated Options and Subcommands
+
+Since picocli 4.4, the parser can recognize abbreviated options and subcommands.
+This needs to be enabled explicitly with `CommandLine::setAbbreviatedOptionsAllowed` and `CommandLine::setAbbreviatedSubcommandsAllowed`.
+
+#### Recognized Abbreviations
+When abbreviations are enabled, users can specify the initial letter(s) of the first component and optionally of one or more subsequent components of an option or subcommand name.
+
+"Components" are separated by `-` dash characters or by case, so for example, both `--CamelCase` and `--kebab-case` have two components.
+
+NOTE: When case sensitivity is disabled, only the `-` dash character can be used to separate components.
+
+Examples of valid abbreviations:
+
+```
+Option or Subcommand | Recognized Abbreviations
+-------------------- | ------------------------
+--veryLongCamelCase  | --very, --vLCC  --vCase
+--super-long-option  | --sup, --sLO, --s-l-o, --s-lon, --s-opt, --sOpt
+some-long-command    | so, sLC, s-l-c, soLoCo, someCom
+```
+
+#### Ambiguous Abbreviations
+When the user specifies input that can match multiple options or subcommands, the parser throws a `ParameterException`.
+When applications use the `execute` method, a short error message and the usage help is displayed to the user.
+
+For example, given a command with subcommands `help` and `hello`, then ambiguous user input like `hel` will show this error message:
+
+```
+Error: 'hel' is not unique: it matches 'hello', 'help'
+```
+
+#### Abbreviated Long Options and POSIX Clustered Short Options
+
+When an argument can match both a long option and a set of clustered short options, picocli matches the long option.
+
+For example:
+
+```java
+class AbbreviationsAndPosix {
+    @Option(names = "-A") boolean a;
+    @Option(names = "-B") boolean b;
+    @Option(names = "-AaaBbb") boolean aaaBbb;
+}
+AbbreviationsAndPosix app = new AbbreviationsAndPosix();
+new CommandLine(app).setAbbreviatedOptionsAllowed(true).parseArgs("-AB");
+assertTrue(app.aaaBbb);
+assertFalse(app.a);
+assertFalse(app.b);
+```
+
+When abbreviated options are enabled, user input `-AB` will match the long `-AaaBbb` option, but not the `-A` and `-B` options.
+
+
+
+## <a name="4.4.0-fixes"></a> Fixed issues
+* [#10][#732][#1047] API: Support abbreviated options and commands. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#1074][#1075] API: Added method `ParseResult::expandedArgs` to return the list of arguments after `@-file` expansion. Thanks to [Kevin Bedi](https://github.com/mashlol) for the pull request.
+* [#1052] API: Show/Hide commands in usage help on specific conditions. Thanks to [Philippe Charles](https://github.com/charphi) for raising this.
+* [#1088] API: Add method `Help::allSubcommands` to return all subcommands, including hidden ones. Clarify the semantics of `Help::subcommands`.
+* [#1090] API: Add methods `Help::optionListExcludingGroups` to return a String with the rendered section of the usage help containing only the specified options, including hidden ones.
+* [#1092] API: Add method `Help::parameterList(List<PositionalParamSpec>)` to return a String with the rendered section of the usage help containing only the specified positional parameters, including hidden ones.
+* [#1093] API: Add method `Help::commandList(Map<String, Help>)` to return a String with the rendered section of the usage help containing only the specified subcommands, including hidden ones.
+* [#1091] API: Add method `Help::optionListGroupSections` to return a String with the rendered section of the usage help containing only the option groups.
+* [#1089] API: Add method `Help::createDefaultOptionSort` to create a `Comparator` that follows the command and options' configuration.
+* [#1084][#1094] API: Add method `Help::createDefaultLayout(List<OptionSpec>, List<PositionalParamSpec>, ColorScheme)` to create a layout for the specified options and positionals.
+* [#1087] API: Add methods `ArgumentGroupSpec::allOptionsNested` and `ArgumentGroupSpec::allPositionalParametersNested`.
+* [#1086] API: add methods `Help.Layout::addAllOptions` and `Help.Layout::addAllPositionals`, to show all specified options, including hidden ones.
+* [#1085] API: Add method `Help::optionSectionGroups` to get argument groups with a header.
+* [#1051][#1056] Enhancement: `GenerateCompletion` command no longer needs to be a direct subcommand of the root command. Thanks to [Philippe Charles](https://github.com/charphi) for the pull request.
+* [#1068] Enhancement: Make `ParserSpec::toString` output settings in alphabetic order.
+* [#1069] Enhancement: Debug output should show `optionsCaseInsensitive` and `subcommandsCaseInsensitive` settings.
+* [#1070] Enhancement: Code cleanup: removed redundant modifiers and initializations, unused variables, incorrect javadoc references, and more. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#1096] Enhancement: Override `Help.Column` `equals`, `hashCode` and `toString` methods to facilitate testing.
+* [#1063][#1064] `ManPageGenerator` now correctly excludes hidden options, parameters, and subcommands from man page generation. Thanks to [Brian Demers](https://github.com/bdemers) for the pull request.
+* [#1081] Bugfix: `CommandLine.Help` constructor no longer calls overridable methods `addAllSubcommands` and `createDefaultParamLabelRenderer`.
+* [#1065] Bugfix: With a `List<>` option in `@ArgGroup`, group incorrectly appears twice in the synopsis. Thanks to [kap4lin](https://github.com/kap4lin) for raising this.
+* [#1067] Bugfix: `ParserSpec::initFrom` was not copying `useSimplifiedAtFiles`.
+* [#1054] Bugfix: option-parameter gets lost in Argument Groups. Thanks to [waacc-gh](https://github.com/waacc-gh) for raising this.
+* [#1072] Bugfix: Mixin `UsageMessageSpec::width` and `UsageMessageSpec::longOptionsMaxWidth` is no longer ignored.
+* [#1058][#1059] DOC: Man page generator: fix incorrect asciidoctor call in synopsis.  Thanks to [Andreas Deininger](https://github.com/deining) for the pull request.
+* [#1058][#1060] DOC: Man page generator: add documentation about creating language variants.  Thanks to [Andreas Deininger](https://github.com/deining) for the pull request.
+* [#1073] DOC: Improve user manual: fix typos, update content. Thanks to [Andreas Deininger](https://github.com/deining) for the pull request.
+
+## <a name="4.4.0-deprecated"></a> Deprecations
+No features were deprecated in this release.
+
+## <a name="4.4.0-breaking-changes"></a> Potential breaking changes
+This release has no breaking changes.
+
+
+# <a name="4.3.2"></a> Picocli 4.3.2
+The picocli community is pleased to announce picocli 4.3.2.
+
+This release fixes a bug where the stack trace of an exception in the business logic would omit nested cause exceptions.
+
+This is the seventieth public release.
+Picocli follows [semantic versioning](http://semver.org/).
+
+## <a name="4.3.2-toc"></a> Table of Contents
+* [New and noteworthy](#4.3.2-new)
+* [Fixed issues](#4.3.2-fixes)
+* [Deprecations](#4.3.2-deprecated)
+* [Potential breaking changes](#4.3.2-breaking-changes)
+
+## <a name="4.3.2-new"></a> New and Noteworthy
+
+
+## <a name="4.3.2-fixes"></a> Fixed issues
+* [#1048][#1049] Bugfix: Cause exception not printed by default execution exception handler. Thanks to [Neko Null](https://github.com/jerrylususu) for the pull request.
+
+
+## <a name="4.3.2-deprecated"></a> Deprecations
+No features were deprecated in this release.
+
+## <a name="4.3.2-breaking-changes"></a> Potential breaking changes
+This release has no breaking changes.
+
+
+# <a name="4.3.1"></a> Picocli 4.3.1
+The picocli community is slightly embarrassed to announce picocli 4.3.1. :-)
+
+This release fixes some critical bugs:
+
+* an `IllegalArgumentException: wrong number of arguments` was thrown when the `@Option(scope = INHERIT)` feature is used in a command that has subcommands defined in `@Command`-annotated methods
+* a `NullPointerException` was thrown in `DefaultParamLabelRenderer.renderParameterLabel` for programmatically built models that have a non-`null` `split` regex and do not have a `splitSynopsisLabel`
+* removed call to a `String` method introduced in Java 6, which prevented picocli from running on Java 5
+
+See [Fixed issues](#4.3.1-fixes) for the full list of changes.
+
+This is the sixty-ninth public release.
+Picocli follows [semantic versioning](http://semver.org/).
+
+## <a name="4.3.1-toc"></a> Table of Contents
+* [New and noteworthy](#4.3.1-new)
+* [Fixed issues](#4.3.1-fixes)
+* [Deprecations](#4.3.1-deprecated)
+* [Potential breaking changes](#4.3.1-breaking-changes)
+
+## <a name="4.3.1-new"></a> New and Noteworthy
+
+
+## <a name="4.3.1-fixes"></a> Fixed issues
+* [#1042] Bugfix: "wrong number of arguments" exception when using inherited options with `@Command`-annotated methods. Thanks to [Garret Wilson](https://github.com/garretwilson) for raising this.
+* [#1043] Bugfix: NullPointerException thrown in `DefaultParamLabelRenderer.renderParameterLabel` for programmatically built models that have a non-`null` `split` regex and do not have a `splitSynopsisLabel`.
+* [#1044] Bugfix: only display `splitSynopsisLabel` in usage help message if the option has a `split` regex. Thanks to [Andreas Deininger](https://github.com/deining) for raising this.
+* [#1045] Bugfix: replace use of Java 6 API `String.isEmpty` with picocli-internal Java 5 equivalent.
+* [#1046] DOC: mention picocli's programmatic API and link to the programmatic API documentation from the user manual.
+
+## <a name="4.3.1-deprecated"></a> Deprecations
+No features were deprecated in this release.
+
+## <a name="4.3.1-breaking-changes"></a> Potential breaking changes
+This release has no breaking changes.
+
+
+
+# <a name="4.3.0"></a> Picocli 4.3.0
+The picocli community is pleased to announce picocli 4.3.0.
+
+This is a fairly big release with 70 [tickets closed](https://github.com/remkop/picocli/milestone/65?closed=1), and over 50 [bugfixes and enhancements](#4.3.0-fixes). Many thanks to the picocli community who contributed 21 pull requests!
+
+A major theme of this release is sharing options between commands:
+* New feature: "inherited" options. Options defined with `scope = ScopeType.INHERIT` are shared with all subcommands (and sub-subcommands, to any level of depth). Applications can define an inherited option on the top-level command, in one place, to allow end users to specify this option anywhere: not only on the top-level command, but also on any of the subcommands and nested sub-subcommands.
+* More powerful mixins. Mixin classes can declare a `@Spec(MIXEE)`-annotated field, and picocli will inject the `CommandSpec` of the command _receiving_ this mixin (the "mixee") into this field. This is useful for mixins containing shared logic, in addition to shared options and parameters. 
+
+Another major theme is improved support for positional parameters:
+* Automatic indexes for positional parameters. Single-value positional parameters without an explicit `index = "..."` attribute are now automatically assigned an index based on the other positional parameters in the command. One use case is mixins with positional parameters.
+* Repeatable ArgGroups can now define positional parameters.
+
+Other improvements:
+* The parser now supports case-insensitive mode for options and subcommands.
+* Error handlers now use ANSI colors and styles. The default styles are bold red for the error message, and italic for stack traces. Applications can customize with the new `Help.ColorScheme` methods `errors` and `stackTraces`.
+* The usage help message can now show an entry for `--` in the options list with the `@Command(showEndOfOptionsDelimiterInUsageHelp = true)` annotation.
+* Easily make subcommands mandatory by making the top-level command a class that does not implement `Runnable` or `Callable`.
 
  
-This is the sixty-seventh public release.
+This is the sixty-eighth public release.
 Picocli follows [semantic versioning](http://semver.org/).
 
 ## <a name="4.3.0-toc"></a> Table of Contents
 * [New and noteworthy](#4.3.0-new)
+  * [Inherited Options](#4.3.0-inherited-options)
+  * [Case-insensitive mode](#4.3.0-case-insensitive)
+  * [Automatic Indexes for Positional Parameters](#4.3.0-auto-index)
+  * [Repeatable ArgGroups with Positional Parameters](#4.3.0-positionals-in-groups)
   * [`@Spec(MIXEE)` Annotation](#4.3.0-mixee)
+  * [Showing `--` End of Options in usage help](#4.3.0-end-of-options)
 * [Fixed issues](#4.3.0-fixes)
 * [Deprecations](#4.3.0-deprecated)
 * [Potential breaking changes](#4.3.0-breaking-changes)
 
 ## <a name="4.3.0-new"></a> New and Noteworthy
+### <a name="4.3.0-inherited-options"></a> Inherited Options
+
+This release adds support for "inherited" options. Options defined with `scope = ScopeType.INHERIT` are shared with all subcommands (and sub-subcommands, to any level of depth). Applications can define an inherited option on the top-level command, in one place, to allow end users to specify this option anywhere: not only on the top-level command, but also on any of the subcommands and nested sub-subcommands.
+
+Below is an example where an inherited option is used to configure logging.
+
+```java
+@Command(name = "app", subcommands = Sub.class)
+class App implements Runnable {
+    private static Logger logger = LogManager.getLogger(App.class);
+
+    @Option(names = "-x", scope = ScopeType.LOCAL) // option is not shared: this is the default
+    int x;
+    
+    @Option(names = "-v", scope = ScopeType.INHERIT) // option is shared with subcommands, sub-subcommands, etc
+    public void setVerbose(boolean verbose) {
+        // Configure log4j.
+        // This is a simplistic example: you probably only want to modify the ConsoleAppender level.
+        Configurator.setRootLevel(verbose ? Level.DEBUG : Level.INFO);
+    }
+    
+    public void run() {
+        logger.debug("-x={}", x);
+    }
+}
+
+@Command(name = "sub")
+class Sub implements Runnable {
+    private static Logger logger = LogManager.getLogger(Sub.class);
+
+    @Option(names = "-y")
+    int y;
+    
+    public void run() {
+        logger.debug("-y={}", y);
+    }
+}
+```
+
+Users can specify the `-v` option on either the top-level command or on the subcommand, and it will have the same effect.
+
+```
+# the -v option can be specified on the top-level command
+java App -x=3 -v sub -y=4
+```
+
+Specifying the `-v` option on the subcommand will have the same effect. For example: 
+```
+# specifying the -v option on the subcommand also changes the log level
+java App -x=3 sub -y=4 -v
+```
+
+NOTE: Subcommands don't need to do anything to receive inherited options, but a potential drawback is that subcommands do not get a reference to inherited options.
+
+Subcommands that need to inspect the value of an inherited option can use the `@ParentCommand` annotation to get a reference to their parent command, and access the inherited option via the parent reference.
+Alternatively, for such subcommands, sharing options via mixins may be a more suitable mechanism.
+
+### <a name="4.3.0-case-insensitive"></a> Case-insensitive mode
+By default, all options and subcommands are case sensitive. Case sensitivity can be switched off globally, as well as on a per-command basis.
+
+To toggle case sensitivity for all commands, use the `CommandLine::setSubcommandsCaseInsensitive` and `CommandLine::setOptionsCaseInsensitive` methods. Use the `CommandSpec::subcommandsCaseInsensitive` and `CommandSpec::optionsCaseInsensitive` methods to give some commands a different case sensitivity than others.
+
+
+### <a name="4.3.0-auto-index"></a> Automatic Indexes for Positional Parameters
+
+From this release, when the `index = "..."` attribute is omitted, the default index is `index = "0+"`, which tells picocli to assign an index automatically, starting from zero, based on the other positional parameters defined in the same command.
+
+A simple example can look like this:
+
+```java
+class AutomaticIndex {
+    @Parameters(hidden = true)  // "hidden": don't show this parameter in usage help message
+    List<String> allParameters; // no "index" attribute: captures _all_ arguments
+
+    @Parameters String group;    // assigned index = "0"
+    @Parameters String artifact; // assigned index = "1"
+    @Parameters String version;  // assigned index = "2"
+}
+```
+
+Picocli initializes fields with the values at the specified index in the arguments array.
+
+```java
+String[] args = { "info.picocli", "picocli", "4.3.0" };
+AutomaticIndex auto = CommandLine.populateCommand(new AutomaticIndex(), args);
+
+assert auto.group.equals("info.picocli");
+assert auto.artifact.equals("picocli");
+assert auto.version.equals("4.3.0");
+assert auto.allParameters.equals(Arrays.asList(args));
+```
+
+The default automatic index (`index = "0+"`) for single-value positional parameters is "anchored at zero": it starts at zero, and is increased with each additional positional parameter.
+
+Sometimes you want to have indexes assigned automatically from a different starting point than zero. This can be useful when defining Mixins with positional parameters.
+
+To accomplish this, specify an index with the anchor point and a `+` character to indicate that picocli should start to automatically assign indexes from that anchor point. For example:
+
+```java
+class Anchored {
+    @Parameters(index = "1+") String p1; // assigned index = "1" or higher
+    @Parameters(index = "1+") String p2; // assigned index = "2" or higher
+}
+```
+
+Finally, sometimes you want to have indexes assigned automatically to come at the end. Again, this can be useful when defining Mixins with positional parameters.
+
+To accomplish this, specify an index with a `+` character to indicate that picocli should automatically assign indexes that come at the end. For example:
+
+```java
+class Unanchored {
+    @Parameters(index = "+") String penultimate; // assigned the penultimate index in the command
+    @Parameters(index = "+") String last;        // assigned the last index in the command
+}
+```
+
+### <a name="4.3.0-positionals-in-groups"></a>  Repeatable ArgGroups with Positional Parameters
+
+From this release, positional parameters can be used in repeating [Argument Groups](https://picocli.info/#_argument_groups).
+
+When a `@Parameters` positional parameter is part of a group, its `index` is the index _within the group_, not within the command.
+
+Below is an example of an application that uses a repeating group of positional parameters:
+
+```java
+@Command(name = "grades", mixinStandardHelpOptions = true, version = "grades 1.0")
+public class Grades implements Runnable {
+
+    static class StudentGrade {
+        @Parameters(index = "0") String name;
+        @Parameters(index = "1") BigDecimal grade;
+    }
+
+    @ArgGroup(exclusive = false, multiplicity = "1..*")
+    List<StudentGrade> gradeList;
+
+    @Override
+    public void run() {
+        gradeList.forEach(e -> System.out.println(e.name + ": " + e.grade));
+    }
+
+    public static void main(String[] args) {
+        System.exit(new CommandLine(new Grades()).execute(args));
+    }
+}
+```
+
+Running the above program with this input:
+
+```
+Alice 3.1 Betty 4.0 "X Æ A-12" 3.5 Zaphod 3.4
+```
+Produces the following output:
+
+```
+Alice: 3.1
+Betty: 4.0
+X Æ A-12: 3.5
+Zaphod: 3.4
+```
 
 ### <a name="4.3.0-mixee"></a>  `@Spec(MIXEE)` Annotation
+From this release, mixins are more powerful. Mixin classes can declare a `@Spec(MIXEE)`-annotated field, and picocli will inject the `CommandSpec` of the command _receiving_ this mixin (the "mixee") into this field. This is useful for mixins containing shared logic, in addition to shared options and parameters. 
+
 Since picocli 4.3, the `@Spec` annotation has a `value` element.
 The value is `Spec.Target.SELF` by default, meaning that the `CommandSpec` of the enclosing class is injected into the `@Spec`-annotated field.
 
@@ -56,33 +414,213 @@ class AdvancedMixin {
 }
 ```
 
+### <a name="4.3.0-end-of-options"></a> Showing `--` End of Options in usage help
+From picocli 4.3, an entry for the `--` End of Options delimiter can be shown in the options list of the usage help message of a command with the `@Command(showEndOfOptionsDelimiterInUsageHelp = true)` annotation.
+
+Example command:
+
+```java
+@Command(name = "myapp", showEndOfOptionsDelimiterInUsageHelp = true,
+        mixinStandardHelpOptions = true, description = "Example command.")
+class MyApp {
+    @Parameters(description = "A file.") File file;
+}
+```
+
+The usage help message for this command looks like this:
+
+```
+Usage: myapp [-hV] [--] <file>
+Example command.
+      <file>      A file.
+  -h, --help      Show this help message and exit.
+  -V, --version   Print version information and exit.
+  --              This option can be used to separate command-line options from
+                    the list of positional parameters.
+```
+
+
 ## <a name="4.3.0-fixes"></a> Fixed issues
+* [#649][#948] Provide convenience API for inherited/global options (was: Feature request: inheriting mixins in subcommands). Thanks to [Garret Wilson](https://github.com/garretwilson) for the request and subsequent discussion (and patience!).
+* [#1001] Support required inherited options.
+* [#996] Default values should not be applied to inherited options.
+* [#985] API: Show end-of-options `--` in usage help options list.
 * [#958] API: Add `@Spec(Spec.Target.MIXEE)` annotation element to allow mixins to get a reference to the command they are mixed into.
 * [#960] API: Add method `CommandSpec::root` to return the `CommandSpec` of the top-level command.
-* [#564][#370] Add support for relative indices for positional parameters. Useful in mixins and inherited positional parameters. 
+* [#484][#845][#1008] API: Error handlers now use ANSI colors and styles. Added methods `errors` and `stackTraces` to `Help.ColorScheme`. Thanks to [Neko Null](https://github.com/jerrylususu) for the pull request.
+* [#765][#1017] API: Added `splitSynopsisLabel` attribute on `@Option` and `@Parameters` for controlling how `split` regular expressions are displayed in the synopsis. Thanks to [Murphy Han](https://github.com/Hannnnnn) for the pull request and thanks to [deining](https://github.com/deining) for raising this.
+* [#9][#1021][#1020][#1023][#154] API: Added support for case-insensitive subcommands and options. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request, thanks to [ifsheldon](https://github.com/ifsheldon) for exploring alternative solutions and helping clarify the requirements, and thanks to [Neko Null](https://github.com/jerrylususu) for the pull request with documentation and executable examples.
+* [#564] Add support for relative indices for positional parameters. Useful in mixins and inherited positional parameters. Thanks to [krisleonard-mcafee](https://github.com/krisleonard-mcafee) for raising this topic.
 * [#956] Enhancement: Default ParameterExceptionHandler should show stack trace when tracing is set to DEBUG level.
 * [#952] Enhancement: Make annotation processor quiet by default; add `-Averbose` annotation processor option to enable printing NOTE-level diagnostic messages to the console.
+* [#959] Enhancement: Print "Missing required subcommand" instead of throwing exception if command with subcommands does not implement `Runnable` or `Callable`. Thanks to [Max Rydahl Andersen](https://github.com/maxandersen) for the suggestion.
+* [#693][#1009][#1011] Enhancement: Add autocompletion for the built-in `HelpCommand`. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#1022][#1029] Enhancement/Bugfix: Duplicate negated options were incorrectly accepted. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#1030][#1029] Enhancement/Bugfix: `setOptionsCaseInsensitive` should make negatable options case insensitive. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#1027][#1036] Enhancement: Support repeatable ArgGroups with positional parameters. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
 * [#974] Enhancement/Bugfix: Add support for `@ArgGroup` argument groups in `@Command`-annotated methods. Thanks to [Usman Saleem](https://github.com/usmansaleem) for raising this.
+* [#962][#961] Enhancement/Bugfix: Default value should only be applied if value is missing. Thanks to [粟嘉逸](https://github.com/sjyMystery) and [chirlo](https://github.com/chirlo) for raising this.
+* [#995][#1024][#1035] Enhancement/Bugfix: Reset multi-value options/positional params to initial value when reusing `CommandLine` instances. Thanks to [Linyer-qwq](https://github.com/Linyer-qwq), [WU Jiangning](https://github.com/licia-tia), and [Wycers](https://github.com/Wycers) for the pull request.
+* [#991][#993] Enhancement/Bugfix: Detecting terminal width fails on non-English Windows versions. Thanks to [Stefan Gärtner](https://github.com/S-Gaertner) for the pull request.
+* [#1040] Enhancement: internal code cleanup and minor fixes. Thanks to [NewbieOrange](https://github.com/NewbieOrange) for the pull request.
+* [#987] Bugfix: Bump JLine to 3.14.1 and fix [#969] autocompletion in Picocli Shell JLine3. Thanks to [mattirn](https://github.com/mattirn) for the pull request.
+* [#969] Bugfix: Fixed broken autocompletion for nested subcommands in Picocli Shell JLine3. Thanks to [niklas97](https://github.com/niklas97) for raising this.
 * [#968] Bugfix: Avoid creating user object in Help constructor. Thanks to [Immueggpain](https://github.com/Immueggpain) for raising this.
+* [#990] Bugfix: Options in subcommands were not reset to their initial value between invocations when the `CommandLine` object is reused. Thanks to [marinier](https://github.com/marinier) for [pointing this out](https://stackoverflow.com/questions/61191211).
+* [#984][#997] Bugfix: Parameters heading is now shown in the usage help message when `@filename` is the only parameter. Thanks to [Wycer](https://github.com/Wycers) for the pull request.
+* [#1004] Bugfix: Prevent `NullPointerException` in `IParameterConsumer` with `@Option` in `@ArgGroup`. Thanks to [masupilami](https://github.com/masupilami) for raising this.
+* [#988][#1002] Bugfix: Option group sections in the usage help message now include subgroup options. Thanks to [Wycer](https://github.com/Wycers) for the pull request.
 * [#957] Bugfix: Debug tracing now shows variable value instead of variable name.
 * [#955] Bugfix: TargetInvocationMessage handling in `MethodBinding.set` methods should use `getTargetException` not `getCause`; better error reporting.
+* [#1007] Bugfix: Custom Type Converters are missing for repeated subcommands. Thanks to [Bastian Diehl](https://github.com/diba1013) for raising this.
+* [#1026] Bugfix: Hidden options should not impact usage help.
+* [#1034] Bugfix: Writer should `flush()` in `UnmatchedArgumentException.printSuggestions`. Thanks to [darkmoonka](https://github.com/darkmoonka) for raising this.
 * [#963] DOC: Fixed broken link in README. Thanks to [vladimirf7](https://github.com/vladimirf7) for the pull request.
 * [#895] DOC: Added [Initialization Before Execution](https://picocli.info/#_initialization_before_execution) section on initialization with subcommands to the user manual. Thanks to [Walter Scott Johnson](https://github.com/li-wjohnson) for raising this. 
 * [#951] DOC: Fixed typo in `picocli-codegen` annotation processor documentation: `disable.resource.config` is correct (the option name was incorrectly spelled as `disable.resources.config`). Thanks to [Max Rydahl Andersen](https://github.com/maxandersen) for raising this.
 * [#966] DOC: Add section about Testing to the user manual.
+* [#973] DOC: Update documentation for using the `picocli-codegen` annotation processor during the build with Kotlin.
+* [#972] DOC: Add section "Handling Invalid Input" for custom type converters to user manual, demonstrating `TypeConversionException`. Add example `InetSocketAddressConverter` to `picocli-examples`. Thanks to [Simon](https://github.com/sbernard31) for raising this.
+* [#975] DOC: Update user manual [Annotation Processor](https://picocli.info/#_enabling_the_annotation_processor) section to use `${project.groupId}` instead of deprecated `${groupId}`. Thanks to [Dmitry Timofeev](https://github.com/dmitry-timofeev) for the pull request.
+* [#976] DOC: Update user manual Testing section; add subsection on [Testing Environment Variables](file:///C:/Users/remko/IdeaProjects/picocli3/build/docs/html5/index.html#_testing_environment_variables). Thanks to [David M. Carr](https://github.com/davidmc24) for raising this and providing a [sample project](https://github.com/remkop/picocli/files/4359943/bulk-scripts-public.zip).
+* [#979][#981] DOC: Update user manual: add section [Options with an Optional Parameter](https://picocli.info/#_options_with_an_optional_parameter). Thanks to [razvanh](https://github.com/razvanh), [Jake](https://github.com/kyeo138) and [mohdpasha](https://github.com/mohdpasha) for raising this.
+* [#989] DOC: Update examples for `picocli-shell-jline3` prior to and after the [#987][#969] bugfix. Thanks to [Ralf D. Müller](https://github.com/rdmueller) for raising this.
+* [#998] DOC: Update manual: quote option parameter containing pipe characters in `split` regex for FIX message example. Thanks to [Galder Zamarreño](https://github.com/galderz) and [Max Rydahl Andersen](https://github.com/maxandersen) for raising this and subsequent discussion.
+* [#1012] DOC: Update user manual: add to ArgGroup limitations. Thanks to [masupilami](https://github.com/masupilami) and [patric-r](https://github.com/patric-r) for raising this and subsequent discussion.
+* [#1015] DOC: Update user manual: added section Variable Arity Options and Unknown Options. Thanks to [Chris Smowton](https://github.com/smowton) for raising this.
+* [#1019] DOC: Fix PrintExceptionMessageHandler example. Thanks to [Adam Hosman](https://github.com/hosmanadam) for the pull request.
+* [#1006] DOC: Add Mixin example: MyLogger to the user manual.
+* [#1028][#1031] DOC: Update user manual: added Java 15 text blocks example. Thanks to [Enderaoe](https://github.com/Lyther) for the pull request.
+* [#1037] DOC: Update user manual for programmatic API: fix typo. Thanks to [Yoshida](https://github.com/grimrose) for the pull request.
+* [#1041] DOC: Fix broken links in javaDoc. Thanks to [Andreas Deininger](https://github.com/deining) for the pull request.
+* [#1033] TEST: Added tests for [#984][#997]. Thanks to [WU Jiangning](https://github.com/licia-tia) for the pull request.
 * [#965] Dependency Upgrade: in `picocli-examples`, bump `hibernate-validator` from 6.0.2 to 6.1.2 to deal with [CVE-2019-10219](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-10219). Thanks to [https://github.com/Security3rd](Security3rd) for raising this.
-* [#973] (DOC) Update documentation for using the `picocli-codegen` annotation processor during the build with Kotlin.
-* [#972] (DOC) Add section "Handling Invalid Input" for custom type converters to user manual, demonstrating `TypeConversionException`. Add example `InetSocketAddressConverter` to `picocli-examples`. Thanks to [Simon](https://github.com/sbernard31) for raising this.
-* [#975] (DOC) Update user manual [Annotation Processor](https://picocli.info/#_enabling_the_annotation_processor) section to use `${project.groupId}` instead of deprecated `${groupId}`. Thanks to [Dmitry Timofeev](https://github.com/dmitry-timofeev) for the pull request.
-* [#976] (DOC) Update user manual Testing section; add subsection on [Testing Environment Variables](file:///C:/Users/remko/IdeaProjects/picocli3/build/docs/html5/index.html#_testing_environment_variables). Thanks to [David M. Carr](https://github.com/davidmc24) for raising this and providing a [sample project](https://github.com/remkop/picocli/files/4359943/bulk-scripts-public.zip).
-* [#979][#981] (DOC) Update user manual: add section [Options with an Optional Parameter](https://picocli.info/#_options_with_an_optional_parameter). Thanks to [razvanh](https://github.com/razvanh), [Jake](https://github.com/kyeo138) and [mohdpasha](https://github.com/mohdpasha) for raising this.
 
 ## <a name="4.3.0-deprecated"></a> Deprecations
 No features were deprecated in this release.
 
 ## <a name="4.3.0-breaking-changes"></a> Potential breaking changes
-This release has no breaking changes.
 
+Behaviour has changed for some cases involving positional parameters.
+One example is applications that define multiple positional parameters without an explicit `index` (see next section).
+I hope these are edge cases.
+Other than that, some error messages and details of the usage help message have changed.
+See details below.
+
+### Default index for single-value positional parameters
+
+Prior to picocli 4.3.0, if your application defines any single-value positional parameters without explicit `index`, these parameters would all point to index zero.
+From picocli 4.3.0, picocli automatically assigns an index, so the first such parameter gets index `0` (zero), the next parameter gets index `1` (one), the next parameter gets index `2` (two), etc.
+
+This may break applications that have multiple single-value positional parameters without explicit `index`, that expect to capture the first argument in all of these parameters.
+
+### Different error when user specifies too many parameters
+
+The error message has changed when a user specifies more positional parameters than the program can accept. For example:
+
+```java
+class SingleValue {
+    @Parameters String str;
+}
+```
+
+This program only accepts one parameter. What happens when this program is invoked incorrectly with two parameters, like this:
+
+```java
+java SingleValue val1 val2
+```
+
+Before this release, picocli would throw an `OverwrittenOptionException` with message `"positional parameter at index 0..* (<str>) should be specified only once"`.
+
+From picocli 4.3, picocli throws an `UnmatchedArgumentException` with message `"Unmatched argument at index 1: 'val2'"`.
+
+This may break applications that have error handling that depends on an `OverwrittenOptionException` being thrown.
+
+### Different mechanism for dealing with too many parameters
+
+Continuing with the previous example, before this release, applications could deal with this by allowing single-value options to be overwritten:
+
+```java
+// before
+CommandLine cmd = new CommandLine(new SingleValue());
+cmd.setOverwrittenOptionsAllowed(true);
+// ...
+```
+
+From picocli 4.3, applications need to allow unmatched arguments instead:
+
+```java
+// after
+CommandLine cmd = new CommandLine(new SingleValue());
+cmd.setUnmatchedArgumentsAllowed(true);
+// ...
+// get the invalid values
+cmd.getUnmatchedArguments();
+```
+
+### Usage help message for single-value positional parameters
+Before picocli 4.3.0, single-value positional parameters would incorrectly show an ellipsis (`...`) after their parameter label. This ellipsis is incorrect because it indicates that multiple values can be specified. The ellipsis is no longer shown for single-value positional parameters from picocli 4.3.0.
+
+Before:
+
+```
+Usage: <main class> PARAM...
+      PARAM...   Param description.
+```
+
+After:
+
+```
+Usage: <main class> PARAM
+      PARAM   Param description.
+```
+
+This may break application tests that expect a specific usage help message format.
+
+### Different error for missing required options or parameters
+
+#### Missing options list now starts with colon, no more square brackets
+Before:
+
+```
+Missing required option '--required=<required>'
+Missing required options [-a=<first>, -b=<second>, -c=<third>]
+```
+
+After:
+
+```
+Missing required option: '--required=<required>'
+Missing required options: '-a=<first>', '-b=<second>', '-c=<third>'
+```
+
+#### Better message when both options and positional parameters are missing
+Before:
+
+```
+Missing required options [-x=<x>, params[0]=<p0>, params[1]=<p1>]
+```
+
+After:
+
+```
+Missing required options and parameters: '-x=<x>', '<p0>', '<p1>'
+```
+
+#### Missing positional parameters are now quoted
+Before:
+
+```
+Missing required parameter: <mandatory>
+Missing required parameters: <mandatory>, <anotherMandatory>
+```
+
+After:
+
+```
+Missing required parameter: '<mandatory>'
+Missing required parameters: '<mandatory>', '<anotherMandatory>'
+```
 
 
 # <a name="4.2.0"></a> Picocli 4.2.0
@@ -788,7 +1326,7 @@ The picocli community is pleased to announce picocli 4.0.2.
 
 This release contains a bugfixes and enhancements.
 
-This is the fifty-nineth public release.
+This is the fifty-ninth public release.
 Picocli follows [semantic versioning](http://semver.org/).
 
 ## <a name="4.0.2"></a> Table of Contents
@@ -2938,7 +3476,7 @@ Bugfixes:
 * Method subcommands in commands that subclass another command caused `InitializationException`.
 
 
-This is the forty-nineth public release.
+This is the forty-ninth public release.
 Picocli follows [semantic versioning](http://semver.org/).
 
 ## <a name="3.9.4"></a> Table of Contents
@@ -3595,7 +4133,7 @@ This release also contains various improvements the the bash/zsh completion scri
 
 Many thanks to the many members of the picocli community who raised issues and contributed solutions! 
 
-This is the thirty-nineth public release.
+This is the thirty-ninth public release.
 Picocli follows [semantic versioning](http://semver.org/).
 
 ## <a name="3.6.0"></a> Table of Contents

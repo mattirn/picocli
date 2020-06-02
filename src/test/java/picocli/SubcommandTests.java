@@ -563,7 +563,7 @@ public class SubcommandTests {
             new CommandLine(new MainCommand(), new InnerClassFactory(this));
             fail("Expected exception");
         } catch (InitializationException ex) {
-            String expected = String.format("%s is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", MissingCommandAnnotation.class.getName());
+            String expected = String.format("%s is not a command: it has no @Command, @Option, @Parameters or @Unmatched annotations", MissingCommandAnnotation.class.toString());
             assertEquals(expected, ex.getMessage());
         }
     }
@@ -1447,6 +1447,198 @@ public class SubcommandTests {
     }
 
     @Test
+    public void testSubcommandsCaseInsensitive_BeforeSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        assertEquals(false, commandLine.isSubcommandsCaseInsensitive());
+        commandLine.setSubcommandsCaseInsensitive(true);
+        assertEquals(true, commandLine.isSubcommandsCaseInsensitive());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        commandLine.addSubcommand("main", createNestedCommand());
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added afterwards is not impacted", false, sub.isSubcommandsCaseInsensitive());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subcommand added afterwards is not impacted", false, subsub.isSubcommandsCaseInsensitive());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testSubcommandsCaseInsensitive_AfterSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        commandLine.addSubcommand("main", createNestedCommand());
+        assertEquals(false, commandLine.isSubcommandsCaseInsensitive());
+        commandLine.setSubcommandsCaseInsensitive(true);
+        assertEquals(true, commandLine.isSubcommandsCaseInsensitive());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added before IS impacted", true, sub.isSubcommandsCaseInsensitive());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subsubcommand added before IS impacted", true, sub.isSubcommandsCaseInsensitive());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testOptionsCaseInsensitive_BeforeSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        assertEquals(false, commandLine.isOptionsCaseInsensitive());
+        commandLine.setOptionsCaseInsensitive(true);
+        assertEquals(true, commandLine.isOptionsCaseInsensitive());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        commandLine.addSubcommand("main", createNestedCommand());
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added afterwards is not impacted", false, sub.isOptionsCaseInsensitive());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subcommand added afterwards is not impacted", false, subsub.isOptionsCaseInsensitive());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testOptionsCaseInsensitive_AfterSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        commandLine.addSubcommand("main", createNestedCommand());
+        assertEquals(false, commandLine.isOptionsCaseInsensitive());
+        commandLine.setOptionsCaseInsensitive(true);
+        assertEquals(true, commandLine.isOptionsCaseInsensitive());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added before IS impacted", true, sub.isOptionsCaseInsensitive());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subsubcommand added before IS impacted", true, sub.isOptionsCaseInsensitive());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testAbbrevSubcommands_BeforeSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        assertEquals(false, commandLine.isAbbreviatedSubcommandsAllowed());
+        commandLine.setAbbreviatedSubcommandsAllowed(true);
+        assertEquals(true, commandLine.isAbbreviatedSubcommandsAllowed());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        commandLine.addSubcommand("main", createNestedCommand());
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added afterwards is not impacted", false, sub.isAbbreviatedSubcommandsAllowed());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subcommand added afterwards is not impacted", false, subsub.isAbbreviatedSubcommandsAllowed());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testAbbrevSubcommands_AfterSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        commandLine.addSubcommand("main", createNestedCommand());
+        assertEquals(false, commandLine.isAbbreviatedSubcommandsAllowed());
+        commandLine.setAbbreviatedSubcommandsAllowed(true);
+        assertEquals(true, commandLine.isAbbreviatedSubcommandsAllowed());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added before IS impacted", true, sub.isAbbreviatedSubcommandsAllowed());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subsubcommand added before IS impacted", true, sub.isAbbreviatedSubcommandsAllowed());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testAbbrevOptions_BeforeSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        assertEquals(false, commandLine.isAbbreviatedOptionsAllowed());
+        commandLine.setAbbreviatedOptionsAllowed(true);
+        assertEquals(true, commandLine.isAbbreviatedOptionsAllowed());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        commandLine.addSubcommand("main", createNestedCommand());
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added afterwards is not impacted", false, sub.isAbbreviatedOptionsAllowed());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subcommand added afterwards is not impacted", false, subsub.isAbbreviatedOptionsAllowed());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
+    public void testAbbrevOptions_AfterSubcommandsAdded() {
+        @Command
+        class TopLevel {}
+        CommandLine commandLine = new CommandLine(new TopLevel());
+        commandLine.addSubcommand("main", createNestedCommand());
+        assertEquals(false, commandLine.isAbbreviatedOptionsAllowed());
+        commandLine.setAbbreviatedOptionsAllowed(true);
+        assertEquals(true, commandLine.isAbbreviatedOptionsAllowed());
+
+        int childCount = 0;
+        int grandChildCount = 0;
+        for (CommandLine sub : commandLine.getSubcommands().values()) {
+            childCount++;
+            assertEquals("subcommand added before IS impacted", true, sub.isAbbreviatedOptionsAllowed());
+            for (CommandLine subsub : sub.getSubcommands().values()) {
+                grandChildCount++;
+                assertEquals("subsubcommand added before IS impacted", true, sub.isAbbreviatedOptionsAllowed());
+            }
+        }
+        assertTrue(childCount > 0);
+        assertTrue(grandChildCount > 0);
+    }
+
+    @Test
     public void testParserTrimQuotes_BeforeSubcommandsAdded() {
         @Command
         class TopLevel {}
@@ -1915,7 +2107,7 @@ public class SubcommandTests {
 
         final List<String> DEFAULT_LIST = Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis",
                 "descriptionHeading", "description", "parameterListHeading", "atFileParameterList", "parameterList", "optionListHeading",
-                "optionList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer");
+                "optionList", "endOfOptionsList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer");
         assertEquals(DEFAULT_LIST, commandLine.getHelpSectionKeys());
 
         final List<String> NEW_LIST = Arrays.asList("a", "b", "c");
@@ -1946,7 +2138,7 @@ public class SubcommandTests {
         
         final List<String> DEFAULT_LIST = Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis",
                 "descriptionHeading", "description", "parameterListHeading", "atFileParameterList", "parameterList", "optionListHeading",
-                "optionList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer");
+                "optionList", "endOfOptionsList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer");
         assertEquals(DEFAULT_LIST, commandLine.getHelpSectionKeys());
 
         final List<String> NEW_LIST = Arrays.asList("a", "b", "c");
@@ -1973,7 +2165,7 @@ public class SubcommandTests {
         class TopLevel {}
         CommandLine commandLine = new CommandLine(new TopLevel());
 
-        final Set<String> DEFAULT_KEYS = new HashSet<String>(Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis",
+        final Set<String> DEFAULT_KEYS = new HashSet<String>(Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis", "endOfOptionsList",
                 "descriptionHeading", "description", "parameterListHeading", "atFileParameterList", "parameterList", "optionListHeading",
                 "optionList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer"));
         assertEquals(DEFAULT_KEYS, commandLine.getHelpSectionMap().keySet());
@@ -2007,7 +2199,7 @@ public class SubcommandTests {
         CommandLine commandLine = new CommandLine(new TopLevel());
         commandLine.addSubcommand("main", createNestedCommand());
 
-        final Set<String> DEFAULT_KEYS = new HashSet<String>(Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis",
+        final Set<String> DEFAULT_KEYS = new HashSet<String>(Arrays.asList("headerHeading", "header", "synopsisHeading", "synopsis", "endOfOptionsList",
                 "descriptionHeading", "description", "parameterListHeading", "atFileParameterList", "parameterList", "optionListHeading",
                 "optionList", "commandListHeading", "commandList", "exitCodeListHeading", "exitCodeList", "footerHeading", "footer"));
         assertEquals(DEFAULT_KEYS, commandLine.getHelpSectionMap().keySet());
@@ -2180,5 +2372,37 @@ public class SubcommandTests {
                 "  -x=<x>          X; default=123%n" +
                 "Commands:%n" +
                 "  foo  I am playpico foo. I don't do much.%n"), out.toString());
+    }
+
+    @Command(name = "top", subcommands = Sub990.class)
+    static class Top990 {
+        @Option(names = "-a") int a = -11;
+    }
+    @Command(name = "sub", subcommands = SubSub990.class)
+    static class Sub990 {
+        @Option(names = "-b") int b = -22;
+    }
+    @Command(name = "subsub")
+    static class SubSub990 {
+        @Option(names = "-c") int c = -33;
+    }
+
+    //@Ignore("Needs fix for https://github.com/remkop/picocli/issues/990")
+    @Test // https://github.com/remkop/picocli/issues/990
+    public void testIssue990_OptionsInSubcommandsNotResetToTheirInitialValue() {
+        CommandLine cmd = new CommandLine(new Top990());
+        ParseResult result1 = cmd.parseArgs("-a=1 sub -b=2 subsub -c=3".split(" "));
+        assertEquals(Integer.valueOf(1), result1.matchedOptionValue("-a", 0));
+        assertEquals(Integer.valueOf(2), result1.subcommand().matchedOptionValue("-b", 0));
+        assertEquals(Integer.valueOf(3), result1.subcommand().subcommand().matchedOptionValue("-c", 0));
+        assertEquals(1, ((Top990)result1.commandSpec().userObject()).a);
+        assertEquals(2, ((Sub990)result1.subcommand().commandSpec().userObject()).b);
+        assertEquals(3, ((SubSub990)result1.subcommand().subcommand().commandSpec().userObject()).c);
+
+        // now check that option values are reset to their default on the 2nd invocation
+        ParseResult result2 = cmd.parseArgs("sub subsub".split(" "));
+        assertEquals(-11, ((Top990)result2.commandSpec().userObject()).a);
+        assertEquals(-22, ((Sub990)result2.subcommand().commandSpec().userObject()).b);
+        assertEquals(-33, ((SubSub990)result2.subcommand().subcommand().commandSpec().userObject()).c);
     }
 }

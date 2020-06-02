@@ -12,8 +12,10 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Model.OptionSpec;
 import picocli.CommandLine.Model.PositionalParamSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.ParameterException;
+import picocli.CommandLine.Parameters;
 
-import java.util.ListResourceBundle;
+import java.util.*;
 
 import static org.junit.Assert.*;
 import static picocli.CommandLine.ScopeType.INHERIT;
@@ -33,10 +35,19 @@ public class InheritedOptionTest {
         boolean verbose;
     }
     @Command(name = "sub", subcommands = SubSub.class)
-    static class Sub { }
+    static class Sub implements Runnable {
+        public void run() {
+        }
+    }
 
     @Command(name = "subsub")
-    static class SubSub { }
+    static class SubSub implements Runnable {
+        public void run() {
+        }
+        @Command
+        public void subsubsub() {
+        }
+    }
 
     @Test
     public void testGlobalOptionIsAddedToSubcommand() {
@@ -177,14 +188,35 @@ public class InheritedOptionTest {
     }
 
     @Test
+    public void testProgrammaticOptionBuilderInheritedFalseByDefault() {
+        assertFalse(OptionSpec.builder("-a").inherited());
+    }
+
+    @Test
+    public void testProgrammaticOptionBuilderInheritedMutable() {
+        assertTrue(OptionSpec.builder("-a").inherited(true).inherited());
+        assertTrue(OptionSpec.builder("-a").inherited(true).build().inherited());
+    }
+
+    @Test
+    public void testProgrammaticOptionInheritedFalseByDefault() {
+        assertFalse(OptionSpec.builder("-a").build().inherited());
+    }
+
+    @Test
     public void testProgrammaticAddOptionBeforeSub() {
         OptionSpec optA = OptionSpec.builder("-a").scopeType(INHERIT).build();
         CommandSpec spec = CommandSpec.create();
         spec.add(optA);
+        assertFalse(optA.inherited());
+
         CommandSpec sub = CommandSpec.create();
         spec.addSubcommand("sub", sub);
         assertNotNull(spec.findOption("-a"));
         assertNotNull(sub.findOption("-a"));
+
+        assertFalse(spec.findOption("-a").inherited());
+        assertTrue(sub.findOption("-a").inherited());
     }
 
     @Test
@@ -194,8 +226,13 @@ public class InheritedOptionTest {
         CommandSpec sub = CommandSpec.create();
         spec.addSubcommand("sub", sub);
         spec.add(optA);
+        assertFalse(optA.inherited());
+
         assertNotNull(spec.findOption("-a"));
         assertNotNull(sub.findOption("-a"));
+
+        assertFalse(spec.findOption("-a").inherited());
+        assertTrue(sub.findOption("-a").inherited());
     }
 
     @Test
@@ -215,14 +252,35 @@ public class InheritedOptionTest {
     }
 
     @Test
+    public void testProgrammaticPositionalParamBuilderInheritedFalseByDefault() {
+        assertFalse(PositionalParamSpec.builder().inherited());
+    }
+
+    @Test
+    public void testProgrammaticPositionalParamBuilderInheritedMutable() {
+        assertTrue(PositionalParamSpec.builder().inherited(true).inherited());
+        assertTrue(PositionalParamSpec.builder().inherited(true).build().inherited());
+    }
+
+    @Test
+    public void testProgrammaticPositionalParamInheritedFalseByDefault() {
+        assertFalse(PositionalParamSpec.builder().build().inherited());
+    }
+
+    @Test
     public void testProgrammaticAddPositionalParamBeforeSub() {
-        PositionalParamSpec optA = PositionalParamSpec.builder().scopeType(INHERIT).build();
+        PositionalParamSpec positional = PositionalParamSpec.builder().scopeType(INHERIT).build();
         CommandSpec spec = CommandSpec.create();
-        spec.add(optA);
+        spec.add(positional);
+        assertFalse(positional.inherited());
+
         CommandSpec sub = CommandSpec.create();
         spec.addSubcommand("sub", sub);
         assertFalse(spec.positionalParameters().isEmpty());
         assertFalse(sub.positionalParameters().isEmpty());
+
+        assertFalse(spec.positionalParameters().get(0).inherited());
+        assertTrue(sub.positionalParameters().get(0).inherited());
     }
 
     @Test
@@ -232,7 +290,184 @@ public class InheritedOptionTest {
         CommandSpec sub = CommandSpec.create();
         spec.addSubcommand("sub", sub);
         spec.add(positional);
+        assertFalse(positional.inherited());
+
         assertFalse(spec.positionalParameters().isEmpty());
         assertFalse(sub.positionalParameters().isEmpty());
+
+        assertFalse(spec.positionalParameters().get(0).inherited());
+        assertTrue(sub.positionalParameters().get(0).inherited());
     }
+
+
+    @Command(name = "TopWithDefault", subcommands = SubWithDefault.class)
+    static class TopWithDefault {
+        List<String> xvalues = new ArrayList<String>();
+        @Option(names = "-x", defaultValue = "xxx", scope = INHERIT)
+        public void setX(String x) {
+            xvalues.add(x);
+        }
+
+        @Option(names = "-y", scope = INHERIT)
+        String y = "yyy";
+
+        @Option(names = "-z", defaultValue = "zzz", scope = INHERIT)
+        String z;
+    }
+    @Command(name = "sub", subcommands = SubSubWithDefault.class)
+    static class SubWithDefault { }
+
+    @Command(name = "subsub")
+    static class SubSubWithDefault { }
+
+    @Test
+    public void testInheritedOptionsWithDefault() {
+        TopWithDefault bean = new TopWithDefault();
+        CommandLine cmd = new CommandLine(bean);
+        cmd.parseArgs();
+
+        assertEquals(Arrays.asList("xxx"), bean.xvalues);
+        assertEquals("yyy", bean.y);
+        assertEquals("zzz", bean.z);
+
+        cmd.parseArgs("-y=1", "-z=2", "sub");
+
+        assertEquals("1", bean.y);
+        assertEquals("2", bean.z);
+        assertEquals(Arrays.asList("xxx", "xxx"), bean.xvalues); // setters cannot be initialized
+
+        cmd.parseArgs("sub", "subsub");
+
+        assertEquals("zzz", bean.z);
+        assertEquals(Arrays.asList("xxx", "xxx", "xxx"), bean.xvalues); // setters cannot be initialized
+        assertEquals("yyy", bean.y);
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1001
+    public void testInheritedRequiredArgs() {
+        //System.setProperty("picocli.trace", "DEBUG");
+        @Command
+        class App {
+            @Option(names = "-x", required = true, scope = INHERIT) int x;
+            @Command void sub() {}
+        }
+        CommandLine cmd0 = new CommandLine(new App());
+        cmd0.parseArgs("-x=2");
+
+        CommandLine cmd1 = new CommandLine(new App());
+        cmd1.parseArgs("sub", "-x=2");
+
+        CommandLine cmd2 = new CommandLine(new App());
+        try {
+            cmd2.parseArgs();
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required option: '-x=<x>'", ex.getMessage());
+        }
+
+        CommandLine cmd3 = new CommandLine(new App());
+        try {
+            cmd3.parseArgs("sub");
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required option: '-x=<x>'", ex.getMessage());
+        }
+    }
+
+    @Command(subcommands = Sub.class)
+    static class TopWithRequiredArg implements Runnable {
+        @Option(names = "-x", required = true, scope = INHERIT)
+        int x;
+
+        @Parameters(index = "0", scope = INHERIT)
+        String p0;
+
+        @Parameters(index = "1", scope = INHERIT)
+        String p1;
+
+        @Parameters(index = "2..*", scope = INHERIT)
+        String[] remainder;
+
+        public void run() {
+        }
+    }
+    @Test // https://github.com/remkop/picocli/issues/1001
+    public void testInheritedRequiredArgsDeepNesting() {
+        //System.setProperty("picocli.trace", "DEBUG");
+        CommandLine cmdx = new CommandLine(new TopWithRequiredArg());
+        cmdx.parseArgs("-x=2", "0", "1");
+
+        CommandLine cmdSubX = new CommandLine(new TopWithRequiredArg());
+        cmdSubX.parseArgs("sub", "-x=2", "0", "1");
+
+        CommandLine cmdSubSubX = new CommandLine(new TopWithRequiredArg());
+        cmdSubSubX.parseArgs("sub", "subsub", "-x=2", "0", "1");
+
+        TopWithRequiredArg top4 = new TopWithRequiredArg();
+        CommandLine cmdSubSubSubX = new CommandLine(top4);
+        cmdSubSubSubX.parseArgs("sub", "subsub", "subsubsub", "-x=2", "0", "1", "2", "3");
+        assertEquals(2, top4.x);
+        assertEquals("0", top4.p0);
+        assertEquals("1", top4.p1);
+        assertArrayEquals(new String[]{"2", "3"}, top4.remainder);
+
+        CommandLine cmd2 = new CommandLine(new TopWithRequiredArg());
+        try {
+            cmd2.parseArgs();
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required options and parameters: '-x=<x>', '<p0>', '<p1>'", ex.getMessage());
+        }
+
+        CommandLine cmd3 = new CommandLine(new TopWithRequiredArg());
+        try {
+            cmd3.parseArgs("sub");
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required options and parameters: '-x=<x>', '<p0>', '<p1>'", ex.getMessage());
+        }
+
+        CommandLine cmd4 = new CommandLine(new TopWithRequiredArg());
+        try {
+            cmd4.parseArgs("sub", "subsub");
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required options and parameters: '-x=<x>', '<p0>', '<p1>'", ex.getMessage());
+        }
+
+        CommandLine cmd5 = new CommandLine(new TopWithRequiredArg());
+        try {
+            cmd5.parseArgs("sub", "subsub", "subsubsub");
+            fail("Expected exception");
+        } catch (ParameterException ex) {
+            assertEquals("Missing required options and parameters: '-x=<x>', '<p0>', '<p1>'", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testIssue1042InheritedOptionsWithCommandMethods() {
+        @Command(name = "issue1042")
+        class Issue1042 implements Runnable {
+            boolean debug;
+            boolean run;
+            boolean subRun;
+
+            @Option(names = {"--debug", "-d"}, scope = INHERIT)
+            protected void setDebug(boolean debug) {
+                this.debug = debug;
+            }
+
+            public void run() { run = true; }
+
+            @Command
+            void sub() { subRun = true; }
+        }
+
+        Issue1042 bean = new Issue1042();
+        new CommandLine(bean).execute("sub", "--debug");
+        assertTrue(bean.debug);
+        assertTrue(bean.subRun);
+        assertFalse(bean.run);
+    }
+
 }

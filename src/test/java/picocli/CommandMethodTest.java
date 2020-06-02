@@ -114,7 +114,7 @@ public class CommandMethodTest {
             CommandLine.populateCommand(m);
             fail("Missing required field should have thrown exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required parameter: <arg0>", ex.getMessage());
+            assertEquals("Missing required parameter: '<arg0>'", ex.getMessage());
         }
 
         // test execute
@@ -403,7 +403,7 @@ public class CommandMethodTest {
             CommandLine.populateCommand(m, "0");
             fail("Missing required option should have thrown exception");
         } catch (MissingParameterException ex) {
-            assertEquals("Missing required option '-b=<arg1>'", ex.getMessage());
+            assertEquals("Missing required option: '-b=<arg1>'", ex.getMessage());
         }
 
         // test execute
@@ -556,11 +556,12 @@ public class CommandMethodTest {
 
     @Test
     public void testMethodCommandsAreNotSubcommandsOfNonAnnotatedClass() {
+        Object userObject = new UnAnnotatedClassWithoutAnnotatedFields();
         try {
-            new CommandLine(new UnAnnotatedClassWithoutAnnotatedFields());
+            new CommandLine(userObject);
             fail("expected exception");
         } catch (CommandLine.InitializationException ex) {
-            assertEquals("picocli.CommandMethodTest$UnAnnotatedClassWithoutAnnotatedFields " +
+            assertEquals(userObject + " " +
                             "is not a command: it has no @Command, @Option, " +
                             "@Parameters or @Unmatched annotations", ex.getMessage());
         }

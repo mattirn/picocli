@@ -1,14 +1,11 @@
 package picocli;
 
-import junitparams.JUnitParamsRunner;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.ProvideSystemProperty;
 import org.junit.contrib.java.lang.system.RestoreSystemProperties;
 import org.junit.rules.TestRule;
-import org.junit.runner.RunWith;
-import picocli.ArgGroupTest.CommandMethodsWithGroupsAndMixins.InvokedSub;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -30,24 +27,23 @@ import picocli.CommandLine.Model.PositionalParamSpec;
 import picocli.CommandLine.ParseResult.GroupMatchContainer;
 import picocli.CommandLine.ParseResult.GroupMatch;
 import picocli.CommandLine.ParseResult.GroupValidationResult;
+import picocli.CommandLine.UnmatchedArgumentException;
 import picocli.test.Execution;
 import picocli.test.Supplier;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.*;
 import static picocli.ArgGroupTest.CommandMethodsWithGroupsAndMixins.InvokedSub.withMixin;
-import static picocli.ArgGroupTest.CommandMethodsWithGroupsAndMixins.InvokedSub.posAndMixin;
-import static picocli.ArgGroupTest.CommandMethodsWithGroupsAndMixins.InvokedSub.posAndOptAndMixin;
-import static picocli.ArgGroupTest.CommandMethodsWithGroupsAndMixins.InvokedSub.groupFirst;
 
-@RunWith(JUnitParamsRunner.class)
 public class ArgGroupTest {
     @Rule
     public final ProvideSystemProperty ansiOFF = new ProvideSystemProperty("picocli.ansi", "false");
@@ -237,7 +233,7 @@ public class ArgGroupTest {
         try {
             ArgGroupSpec.builder().build();
         } catch (InitializationException ok) {
-            assertEquals("ArgGroup has no options or positional parameters, and no subgroups: null null", ok.getMessage());
+            assertEquals("ArgGroup has no options or positional parameters, and no subgroups: null in null", ok.getMessage());
         }
     }
 
@@ -342,7 +338,7 @@ public class ArgGroupTest {
         builder.addSubgroup(ArgGroupSpec.builder().addSubgroup(b).addArg(OPTION_A).build());
         builder.addArg(PositionalParamSpec.builder().index("0..1").paramLabel("FILE").build());
 
-        String expected2 = "ArgGroup[exclusive=false, multiplicity=1, validate=false, order=123, args=[params[0..1]=FILE], headingKey='my headingKey', heading='my heading'," +
+        String expected2 = "ArgGroup[exclusive=false, multiplicity=1, validate=false, order=123, args=[FILE], headingKey='my headingKey', heading='my heading'," +
                 " subgroups=[ArgGroup[exclusive=true, multiplicity=0..1, validate=true, order=-1, args=[-a], headingKey=null, heading=null," +
                 " subgroups=[ArgGroup[exclusive=true, multiplicity=0..1, validate=true, order=-1, args=[-x], headingKey=null, heading=null, subgroups=[]]]" +
                 "]]" +
@@ -472,9 +468,9 @@ public class ArgGroupTest {
             fail("Expected exception");
         } catch (InitializationException ex) {
             assertEquals("ArgGroup has no options or positional parameters, and no subgroups: " +
-                    //"Scope(value=" + app.toString() + ")" +
-                    app.getClass().getName() +
-                    " FieldBinding(" + Invalid.class.getName() + " " + app.getClass().getName() + ".invalid)", ex.getMessage());
+                    "FieldBinding(" + Invalid.class.getName() + " " + app.getClass().getName() + ".invalid) in " +
+                            app.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(app))
+                    , ex.getMessage());
         }
     }
 
@@ -627,7 +623,7 @@ public class ArgGroupTest {
         class App {
             @ArgGroup(exclusive = true, multiplicity = "0..1")
             Group1 g1;
-            
+
             @ArgGroup(exclusive = true, multiplicity = "0..1")
             Group2 g2;
         }
@@ -1495,6 +1491,7 @@ public class ArgGroupTest {
         assertEquals("<f2>", parseResult.matchedPositional(0).paramLabel());
     }
 
+    @Ignore("This no longer works with #1027 improved support for repeatable ArgGroups with positional parameters")
     @Test
     public void testPositionalsInGroupAndInCommand() {
         class Remainder {
@@ -1703,7 +1700,7 @@ public class ArgGroupTest {
         String actual = new CommandLine(new App(), new InnerClassFactory(this)).getUsageMessage(Help.Ansi.OFF);
         assertEquals(expected, actual);
     }
-    
+
     @Test
     public void testRequiredArgsInAGroupAreNotValidated() {
         class App {
@@ -1978,7 +1975,7 @@ public class ArgGroupTest {
         List<Composite> composites;
 
         static class Composite {
-            @ArgGroup(exclusive = false, multiplicity = "1")
+            @ArgGroup(exclusive = false, multiplicity = "0..1")
             Dependent dependent;
 
             @ArgGroup(exclusive = true, multiplicity = "1")
@@ -2022,6 +2019,107 @@ public class ArgGroupTest {
         assertEquals(2, c2.dependent.a);
         assertEquals(2, c2.dependent.b);
         assertEquals(2, c2.dependent.c);
+    }
+
+    @Test
+    public void testIssue1053NPE() {
+        CompositeGroupDemo example = new CompositeGroupDemo();
+        CommandLine cmd = new CommandLine(example);
+
+        cmd.parseArgs("-a 1 -b 1 -c 1 -x -z".split(" "));
+
+        assertEquals(2, example.composites.size());
+        CompositeGroupDemo.Composite c1 = example.composites.get(0);
+        assertTrue(c1.exclusive.x);
+        assertFalse(c1.exclusive.y);
+        assertFalse(c1.exclusive.z);
+        assertEquals(1, c1.dependent.a);
+        assertEquals(1, c1.dependent.b);
+        assertEquals(1, c1.dependent.c);
+
+        CompositeGroupDemo.Composite c2 = example.composites.get(1);
+        assertFalse(c2.exclusive.x);
+        assertFalse(c2.exclusive.y);
+        assertTrue(c2.exclusive.z);
+        assertNull(c2.dependent);
+    }
+
+    static class Issue1054 {
+        @ArgGroup(exclusive = false, multiplicity = "1..*")
+        private List<Modification> modifications = null;
+
+        private static class Modification {
+            @Option(names = { "-f", "--find" }, required = true)
+            public Pattern findPattern = null;
+
+            @ArgGroup(exclusive = true, multiplicity = "1")
+            private Change  change      = null;
+        }
+
+        private static class Change {
+            @Option(names = { "-d", "--delete" }, required = true)
+            public boolean delete      = false;
+            @Option(names = { "-w", "--replace-with" }, required = true)
+            public String  replacement = null;
+        }
+    }
+    //@Ignore
+    @Test // https://github.com/remkop/picocli/issues/1054
+    public void testIssue1054() {
+        //-f pattern1 -f pattern2 -d --> accepted --> wrong: findPattern = "pattern2", "pattern1" is lost/ignored
+        try {
+            //TestUtil.setTraceLevel("DEBUG");
+            Issue1054 bean3 = new Issue1054();
+            new CommandLine(bean3).parseArgs("-f pattern1 -f pattern2 -d".split(" "));
+            //System.out.println(bean3);
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Missing required argument(s): (-d | -w=<replacement>)", ex.getMessage());
+        }
+    }
+    @Test
+    public void testIssue1054Variation() {
+        try {
+            Issue1054 bean3 = new Issue1054();
+            new CommandLine(bean3).parseArgs("-f pattern1 -f pattern2".split(" "));
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Missing required argument(s): (-d | -w=<replacement>)", ex.getMessage());
+        }
+    }
+    @Test // https://github.com/remkop/picocli/issues/1054
+    public void testIssue1054RegressionTest() {
+        //-f pattern -d --> accepted --> ok
+        Issue1054 bean1 = new Issue1054();
+        new CommandLine(bean1).parseArgs("-f pattern -d".split(" "));
+        assertEquals(1, bean1.modifications.size());
+        assertEquals("pattern", bean1.modifications.get(0).findPattern.pattern());
+        assertTrue(bean1.modifications.get(0).change.delete);
+        assertNull(bean1.modifications.get(0).change.replacement);
+
+        //-f pattern -w text --> accepted --> ok
+        Issue1054 bean2 = new Issue1054();
+        new CommandLine(bean2).parseArgs("-f pattern -w text".split(" "));
+        assertEquals(1, bean2.modifications.size());
+        assertEquals("pattern", bean2.modifications.get(0).findPattern.pattern());
+        assertFalse(bean2.modifications.get(0).change.delete);
+        assertEquals("text", bean2.modifications.get(0).change.replacement);
+
+        //-f pattern -d -w text --> error --> ok
+        try {
+            new CommandLine(new Issue1054()).parseArgs("-f pattern -d -w text".split(" "));
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Missing required argument(s): --find=<findPattern>", ex.getMessage());
+        }
+
+        //-d -f pattern -w text --> error --> ok
+        try {
+            new CommandLine(new Issue1054()).parseArgs("-d -f pattern -w text".split(" "));
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Missing required argument(s): --find=<findPattern>", ex.getMessage());
+        }
     }
 
     static class CompositeGroupSynopsisDemo {
@@ -2233,7 +2331,7 @@ public class ArgGroupTest {
         public static class CreateCommand implements Runnable {
             @Option(names = "--level-0", required = true)
             private String l0;
-            
+
             @ArgGroup(exclusive = false, multiplicity = "1")
             private Level1Argument level1 = new Level1Argument();
 
@@ -3087,7 +3185,7 @@ public class ArgGroupTest {
             return anInt == other.anInt && aLong == other.aLong;
         }
     }
-    
+
     @picocli.CommandLine.Command
     static class CommandMethodsWithGroupsAndMixins {
         enum InvokedSub { withMixin, posAndMixin, posAndOptAndMixin, groupFirst}
@@ -3216,95 +3314,500 @@ public class ArgGroupTest {
                 "  -y%n"));
     }
 
-    private Object[] commandMethodArgs() {
-        SomeMixin _000_000 = new SomeMixin();
-        SomeMixin _123_000 = new SomeMixin(123, 0);
-        SomeMixin _000_543 = new SomeMixin(0, 543);
-        SomeMixin _123_321 = new SomeMixin(123, 321);
-        Composite AB = new Composite(true, true, false, false);
-        Composite X = new Composite(false, false, true, false);
-        Composite Y = new Composite(false, false, false, true);
-        int[] _987 = new int[] {9, 8, 7};
-        String[] _sXY = new String[] {"X", "Y"};
-        return new Object[][]{
-                {"withMixin",                     withMixin, _000_000, null, null, null},
-                {"withMixin -i=123",              withMixin, _123_000, null, null, null},
-                {"withMixin -L=543",              withMixin, _000_543, null, null, null},
-                {"withMixin -i=123 -L=321",       withMixin, _123_321, null, null, null},
-                {"withMixin -a -b",               withMixin, _000_000, AB, null, null},
-                {"withMixin -i=123 -a -b",        withMixin, _123_000, AB, null, null},
-                {"withMixin -L=543 -a -b",        withMixin, _000_543, AB, null, null},
-                {"withMixin -i=123 -L=321 -a -b", withMixin, _123_321, AB, null, null},
-                {"withMixin -x",                  withMixin, _000_000, X, null, null},
-                {"withMixin -i=123 -x",           withMixin, _123_000, X, null, null},
-                {"withMixin -L=543 -y",           withMixin, _000_543, Y, null, null},
-                {"withMixin -i=123 -L=321 -y",    withMixin, _123_321, Y, null, null},
-
-                {"posAndMixin 9 8 7",                     posAndMixin, _000_000, null, _987, null},
-                {"posAndMixin 9 8 7 -i=123",              posAndMixin, _123_000, null, _987, null},
-                {"posAndMixin 9 8 7 -L=543",              posAndMixin, _000_543, null, _987, null},
-                {"posAndMixin 9 8 7 -i=123 -L=321",       posAndMixin, _123_321, null, _987, null},
-                {"posAndMixin 9 8 7 -a -b",               posAndMixin, _000_000, AB, _987, null},
-                {"posAndMixin 9 8 7 -i=123 -a -b",        posAndMixin, _123_000, AB, _987, null},
-                {"posAndMixin 9 8 7 -L=543 -a -b",        posAndMixin, _000_543, AB, _987, null},
-                {"posAndMixin 9 8 7 -i=123 -L=321 -a -b", posAndMixin, _123_321, AB, _987, null},
-                {"posAndMixin 9 8 7 -x",                  posAndMixin, _000_000, X, _987, null},
-                {"posAndMixin 9 8 7 -i=123 -x",           posAndMixin, _123_000, X, _987, null},
-                {"posAndMixin 9 8 7 -L=543 -y",           posAndMixin, _000_543, Y, _987, null},
-                {"posAndMixin 9 8 7 -i=123 -L=321 -y",    posAndMixin, _123_321, Y, _987, null},
-
-                {"posAndOptAndMixin 9 8 7 -sX -sY ",                    posAndOptAndMixin, _000_000, null, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123",              posAndOptAndMixin, _123_000, null, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -L=543",              posAndOptAndMixin, _000_543, null, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123 -L=321",       posAndOptAndMixin, _123_321, null, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -a -b",               posAndOptAndMixin, _000_000, AB, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123 -a -b",        posAndOptAndMixin, _123_000, AB, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -L=543 -a -b",        posAndOptAndMixin, _000_543, AB, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123 -L=321 -a -b", posAndOptAndMixin, _123_321, AB, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -x",                  posAndOptAndMixin, _000_000, X, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123 -x",           posAndOptAndMixin, _123_000, X, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -L=543 -y",           posAndOptAndMixin, _000_543, Y, _987, _sXY},
-                {"posAndOptAndMixin 9 8 7 -sX -sY -i=123 -L=321 -y",    posAndOptAndMixin, _123_321, Y, _987, _sXY},
-
-                {"groupFirst 9 8 7 -sX -sY ",                    groupFirst, _000_000, null, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123",              groupFirst, _123_000, null, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -L=543",              groupFirst, _000_543, null, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123 -L=321",       groupFirst, _123_321, null, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -a -b",               groupFirst, _000_000, AB, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123 -a -b",        groupFirst, _123_000, AB, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -L=543 -a -b",        groupFirst, _000_543, AB, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123 -L=321 -a -b", groupFirst, _123_321, AB, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -x",                  groupFirst, _000_000, X, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123 -x",           groupFirst, _123_000, X, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -L=543 -y",           groupFirst, _000_543, Y, _987, _sXY},
-                {"groupFirst 9 8 7 -sX -sY -i=123 -L=321 -y",    groupFirst, _123_321, Y, _987, _sXY},
-        };
-    }
-
-    @Test
-    @junitparams.Parameters(method = "commandMethodArgs")
-    public void testCommandMethod(String args,
-                                  InvokedSub invokedSub,
-                                  SomeMixin expectedMixin,
-                                  Composite expectedArgGroup,
-                                  int[] expectedPositionalInt,
-                                  String[] expectedStrings) {
-        CommandMethodsWithGroupsAndMixins bean = new CommandMethodsWithGroupsAndMixins();
-        new CommandLine(bean).execute(args.split(" "));
-        assertTrue(bean.invoked.contains(invokedSub));
-        EnumSet<InvokedSub> notInvoked = EnumSet.allOf(InvokedSub.class);
-        notInvoked.remove(invokedSub);
-        for (InvokedSub sub : notInvoked) {
-            assertFalse(bean.invoked.contains(sub));
-        }
-        assertTrue(bean.invoked.contains(invokedSub));
-        assertEquals(expectedMixin, bean.myMixin);
-        assertEquals(expectedArgGroup, bean.myComposite);
-        assertArrayEquals(expectedPositionalInt, bean.myPositionalInt);
-        assertArrayEquals(expectedStrings, bean.myStrings);
-    }
 
     // TODO GroupMatch.container()
     // TODO GroupMatch.matchedMaxElements()
     // TODO GroupMatch.matchedFully()
+
+    @Command(name = "ami", description = "ami description", customSynopsis = "ami [OPTIONS]")
+    static class Issue988 {
+        @ArgGroup(exclusive = true, /*heading = "",*/ order = 9)
+        ProjectOrTreeOptions projectOrTreeOptions = new ProjectOrTreeOptions();
+
+        @ArgGroup(validate = false, heading = "General Options:%n", order = 30)
+        GeneralOptions generalOptions = new GeneralOptions();
+
+        static class ProjectOrTreeOptions {
+            @ArgGroup(exclusive = false, multiplicity = "0..1",
+                    heading = "CProject Options:%n", order = 10)
+            CProjectOptions cProjectOptions = new CProjectOptions();
+
+            @ArgGroup(exclusive = false, multiplicity = "0..1",
+                    heading = "CTree Options:%n", order = 20)
+            CTreeOptions cTreeOptions = new CTreeOptions();
+        }
+
+        static class CProjectOptions {
+            @Option(names = {"-p", "--cproject"}, paramLabel = "DIR",
+                    description = "The CProject (directory) to process. The cProject name is the basename of the file."
+            )
+            protected String cProjectDirectory = null;
+
+            protected static class TreeOptions {
+                @Option(names = {"-r", "--includetree"}, paramLabel = "DIR", order = 12,
+                        arity = "1..*",
+                        description = "Include only the specified CTrees."
+                )
+                protected String[] includeTrees;
+
+                @Option(names = {"-R", "--excludetree"}, paramLabel = "DIR", order = 13,
+                        arity = "1..*",
+                        description = "Exclude the specified CTrees."
+                )
+                protected String[] excludeTrees;
+            }
+
+            @ArgGroup(exclusive = true, multiplicity = "0..1", order = 11/*, heading = ""*/)
+            TreeOptions treeOptions = new TreeOptions();
+        }
+
+        static class CTreeOptions {
+            @Option(names = {"-t", "--ctree"}, paramLabel = "DIR",
+                    description = "The CTree (directory) to process. The cTree name is the basename of the file."
+            )
+            protected String cTreeDirectory = null;
+
+            protected static class BaseOptions {
+
+                @Option(names = {"-b", "--includebase"}, paramLabel = "PATH", order = 22,
+                        arity = "1..*",
+                        description = "Include child files of cTree (only works with --ctree)."
+                )
+                protected String[] includeBase;
+
+                @Option(names = {"-B", "--excludebase"}, paramLabel = "PATH",
+                        order = 23,
+                        arity = "1..*",
+                        description = "Exclude child files of cTree (only works with --ctree)."
+                )
+                protected String[] excludeBase;
+            }
+
+            @ArgGroup(exclusive = true, multiplicity = "0..1", /*heading = "",*/ order = 21)
+            BaseOptions baseOptions = new BaseOptions();
+        }
+
+        static class GeneralOptions {
+            @Option(names = {"-i", "--input"}, paramLabel = "FILE",
+                    description = "Input filename (no defaults)"
+            )
+            protected String input = null;
+
+            @Option(names = {"-n", "--inputname"}, paramLabel = "PATH",
+                    description = "User's basename for input files (e.g. foo/bar/<basename>.png) or directories."
+            )
+            protected String inputBasename;
+        }
+    }
+
+    @Test //https://github.com/remkop/picocli/issues/988
+    public void testIssue988OptionGroupSectionsShouldIncludeSubgroupOptions() {
+        String expected = String.format("" +
+                "Usage: ami [OPTIONS]%n" +
+                "ami description%n" +
+                "CProject Options:%n" +
+                "  -p, --cproject=DIR         The CProject (directory) to process. The cProject%n" +
+                "                               name is the basename of the file.%n" +
+                "  -r, --includetree=DIR...   Include only the specified CTrees.%n" +
+                "  -R, --excludetree=DIR...   Exclude the specified CTrees.%n" +
+                "CTree Options:%n" +
+                "  -b, --includebase=PATH...  Include child files of cTree (only works with%n" +
+                "                               --ctree).%n" +
+                "  -B, --excludebase=PATH...  Exclude child files of cTree (only works with%n" +
+                "                               --ctree).%n" +
+                "  -t, --ctree=DIR            The CTree (directory) to process. The cTree name%n" +
+                "                               is the basename of the file.%n" +
+                "General Options:%n" +
+                "  -i, --input=FILE           Input filename (no defaults)%n" +
+                "  -n, --inputname=PATH       User's basename for input files (e.g.%n" +
+                "                               foo/bar/<basename>.png) or directories.%n");
+        assertEquals(expected, new CommandLine(new Issue988()).getUsageMessage());
+    }
+
+    static class StudentGrade {
+        @Parameters(index = "0") String name;
+        @Parameters(index = "1") BigDecimal grade;
+
+        public StudentGrade() {}
+        public StudentGrade(String name, String grade) {
+            this(name, new BigDecimal(grade));
+        }
+        public StudentGrade(String name, BigDecimal grade) {
+            this.name = name;
+            this.grade = grade;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            StudentGrade that = (StudentGrade) o;
+            return name.equals(that.name) && grade.equals(that.grade);
+        }
+
+        @Override
+        public String toString() {
+            return "StudentGrade{" +
+                    "name='" + name + '\'' +
+                    ", grade=" + grade +
+                    '}';
+        }
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1027
+    public void testIssue1027RepeatingPositionalParams() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "1..*")
+            List<StudentGrade> gradeList;
+        }
+
+        Issue1027 bean = new Issue1027();
+        new CommandLine(bean).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0".split(" "));
+
+        assertEquals(4, bean.gradeList.size());
+        assertEquals(new StudentGrade("Abby", "4.0"), bean.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean.gradeList.get(1));
+        assertEquals(new StudentGrade("Caily", "3.5"), bean.gradeList.get(2));
+        assertEquals(new StudentGrade("Danny", "4.0"), bean.gradeList.get(3));
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1027
+    public void testIssue1027RepeatingPositionalParamsEdgeCase1() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "4..*")
+            List<StudentGrade> gradeList;
+        }
+
+        Issue1027 bean = new Issue1027();
+        new CommandLine(bean).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0".split(" "));
+
+        assertEquals(4, bean.gradeList.size());
+        assertEquals(new StudentGrade("Abby", "4.0"), bean.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean.gradeList.get(1));
+        assertEquals(new StudentGrade("Caily", "3.5"), bean.gradeList.get(2));
+        assertEquals(new StudentGrade("Danny", "4.0"), bean.gradeList.get(3));
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1027
+    public void testIssue1027RepeatingPositionalParamsEdgeCase2() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "1..4")
+            List<StudentGrade> gradeList;
+        }
+
+        Issue1027 bean = new Issue1027();
+        new CommandLine(bean).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0".split(" "));
+
+        assertEquals(4, bean.gradeList.size());
+        assertEquals(new StudentGrade("Abby", "4.0"), bean.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean.gradeList.get(1));
+        assertEquals(new StudentGrade("Caily", "3.5"), bean.gradeList.get(2));
+        assertEquals(new StudentGrade("Danny", "4.0"), bean.gradeList.get(3));
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1027
+    public void testIssue1027RepeatingPositionalParamsWithMinMultiplicity() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "4..*")
+            List<StudentGrade> gradeList;
+        }
+
+        Issue1027 bean = new Issue1027();
+        try {
+            new CommandLine(bean).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5".split(" "));
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Group: (<name> <grade>) must be specified 4 times but was matched 3 times", ex.getMessage());
+        }
+    }
+
+    @Test // https://github.com/remkop/picocli/issues/1027
+    public void testIssue1027RepeatingPositionalParamsWithMaxMultiplicity() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "1..3")
+            List<StudentGrade> gradeList;
+        }
+
+        try {
+            new CommandLine(new Issue1027()).parseArgs();
+            fail("Expected exception");
+        } catch (MissingParameterException ex) {
+            assertEquals("Error: Missing required argument(s): (<name> <grade>)", ex.getMessage());
+        }
+        Issue1027 bean1 = new Issue1027();
+        new CommandLine(bean1).parseArgs("Abby 4.0".split(" "));
+        assertEquals(new StudentGrade("Abby", "4.0"),  bean1.gradeList.get(0));
+
+        Issue1027 bean2 = new Issue1027();
+        new CommandLine(bean2).parseArgs("Abby 4.0 Billy 3.5".split(" "));
+        assertEquals(new StudentGrade("Abby", "4.0"),  bean2.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean2.gradeList.get(1));
+
+        Issue1027 bean3 = new Issue1027();
+        new CommandLine(bean3).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5".split(" "));
+        assertEquals(new StudentGrade("Abby", "4.0"),  bean3.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean3.gradeList.get(1));
+        assertEquals(new StudentGrade("Caily", "3.5"), bean3.gradeList.get(2));
+
+        Issue1027 bean4 = new Issue1027();
+        try {
+            new CommandLine(bean4).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0".split(" "));
+            fail("Expected exception");
+        } catch (MaxValuesExceededException ex) {
+            assertEquals("Error: expected only one match but got (<name> <grade>) [<name> <grade>] [<name> <grade>]="
+                    + "{params[0]=Abby params[1]=4.0 params[0]=Billy params[1]=3.5 params[0]=Caily params[1]=3.5} and (<name> <grade>) "
+                    + "[<name> <grade>] [<name> <grade>]={params[0]=Danny params[1]=4.0}", ex.getMessage());
+        } catch (UnmatchedArgumentException ex) {
+            assertEquals("Unmatched arguments from index 6: 'Danny', '4.0'", ex.getMessage());
+        }
+    }
+
+    @Test
+    public void testMultipleGroupsWithPositional() {
+        class Issue1027 {
+            @ArgGroup(exclusive = false, multiplicity = "1..4")
+            List<StudentGrade> gradeList;
+
+            @ArgGroup(exclusive = false, multiplicity = "1")
+            List<StudentGrade> anotherList;
+        }
+
+        Issue1027 bean4 = new Issue1027();
+        new CommandLine(bean4).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0".split(" "));
+        assertEquals(4, bean4.gradeList.size());
+        assertEquals(new StudentGrade("Abby", "4.0"),  bean4.gradeList.get(0));
+        assertEquals(new StudentGrade("Billy", "3.5"), bean4.gradeList.get(1));
+        assertEquals(new StudentGrade("Caily", "3.5"), bean4.gradeList.get(2));
+        assertEquals(new StudentGrade("Danny", "4.0"), bean4.gradeList.get(3));
+
+        assertEquals(1, bean4.anotherList.size());
+        assertEquals(new StudentGrade("Abby", "4.0"),  bean4.anotherList.get(0));
+
+        Issue1027 bean5 = new Issue1027();
+        try {
+            new CommandLine(bean5).parseArgs("Abby 4.0 Billy 3.5 Caily 3.5 Danny 4.0 Egon 3.5".split(" "));
+            fail("Expected exception");
+        } catch (UnmatchedArgumentException ex) {
+            assertEquals("Unmatched arguments from index 8: 'Egon', '3.5'", ex.getMessage());
+        }
+    }
+
+    static class InnerPositional1027 {
+        @Parameters(index = "0") String param00;
+        @Parameters(index = "1") String param01;
+
+        public InnerPositional1027() {}
+        public InnerPositional1027(String param00, String param01) {
+            this.param00 = param00;
+            this.param01 = param01;
+        }
+        public boolean equals(Object obj) {
+            if (!(obj instanceof InnerPositional1027)) { return false; }
+            InnerPositional1027 other = (InnerPositional1027) obj;
+            return TestUtil.equals(this.param00, other.param00)
+                    && TestUtil.equals(this.param01, other.param01);
+        }
+    }
+    static class Inner1027 {
+        @Option(names = "-y", required = true) boolean y;
+
+        @ArgGroup(exclusive = false, multiplicity = "1")
+        InnerPositional1027 innerPositional;
+
+        public Inner1027() {}
+        public Inner1027(String param0, String param1) {
+            this.innerPositional = new InnerPositional1027(param0, param1);
+        }
+        public boolean equals(Object obj) {
+            if (!(obj instanceof Inner1027)) { return false; }
+            Inner1027 other = (Inner1027) obj;
+            return TestUtil.equals(this.innerPositional, other.innerPositional);
+        }
+    }
+    static class Outer1027 {
+        @Option(names = "-x", required = true) boolean x;
+        @Parameters(index = "0") String param0;
+        @Parameters(index = "1") String param1;
+
+        @ArgGroup(exclusive = false, multiplicity = "0..*")
+        List<Inner1027> inners;
+
+        public Outer1027() {}
+        public Outer1027(String param0, String param1, List<Inner1027> inners) {
+            this.param0 = param0;
+            this.param1 = param1;
+            this.inners = inners;
+        }
+        public boolean equals(Object obj) {
+            if (!(obj instanceof Outer1027)) { return false; }
+            Outer1027 other = (Outer1027) obj;
+            return TestUtil.equals(this.param0, other.param0)
+                    && TestUtil.equals(this.param1, other.param1)
+                    && TestUtil.equals(this.inners, other.inners)
+                    ;
+        }
+    }
+    @Ignore
+    @Test
+    public void testNestedPositionals() {
+        class Nested {
+            @ArgGroup(exclusive = false, multiplicity = "0..*")
+            List<Outer1027> outers;
+        }
+        Nested bean = new Nested();
+        new CommandLine(bean).parseArgs("-x 0 1 -x 00 11 -y 000 111 -y 0000 1111 -x 00000 11111".split(" "));
+        assertEquals(3, bean.outers.size());
+        assertEquals(new Outer1027("0", "1", null),  bean.outers.get(0));
+        List<Inner1027> inners = Arrays.asList(new Inner1027("000", "111"), new Inner1027("0000", "1111"));
+        assertEquals(new Outer1027("00", "11", inners), bean.outers.get(1));
+        assertEquals(new Outer1027("00000", "11111", null), bean.outers.get(2));
+    }
+
+    @Command(name = "MyApp")
+    static class Issue1065 {
+
+        @ArgGroup(exclusive = false)
+        MyGroup myGroup;
+
+        static class MyGroup {
+            @Option(names="-A", paramLabel="N", split=",") List<Long> A;
+        }
+    }
+    //https://stackoverflow.com/questions/61964838/picocli-list-option-used-in-arggroup-duplicated-in-short-usage-string
+    @Test
+    public void testIssue1065DuplicateSynopsis() {
+        String expected = String.format("" +
+                "Usage: MyApp [[-A=N[,N...]]...]%n" +
+                "  -A=N[,N...]%n");
+        String actual = new CommandLine(new Issue1065()).getUsageMessage(Help.Ansi.OFF);
+        assertEquals(expected, actual);
+    }
+
+    @Command(name = "MyApp")
+    static class Issue1065ExclusiveGroup {
+
+        @ArgGroup(exclusive = true)
+        MyGroup myGroup;
+
+        static class MyGroup {
+            @Option(names="-A", paramLabel="N", split=",") List<Long> A;
+        }
+    }
+    //https://stackoverflow.com/questions/61964838/picocli-list-option-used-in-arggroup-duplicated-in-short-usage-string
+    @Test
+    public void testIssue1065ExclusiveGroupDuplicateSynopsis() {
+        String expected = String.format("" +
+                "Usage: MyApp [-A=N[,N...] [-A=N[,N...]]...]%n" +
+                "  -A=N[,N...]%n");
+        String actual = new CommandLine(new Issue1065ExclusiveGroup()).getUsageMessage(Help.Ansi.OFF);
+        assertEquals(expected, actual);
+    }
+
+    @Command(name = "MyApp")
+    static class Issue1065NoSplit {
+
+        @ArgGroup(exclusive = false)
+        MyGroup myGroup;
+
+        static class MyGroup {
+            @Option(names="-A", paramLabel="N") List<Long> A;
+        }
+    }
+    //https://stackoverflow.com/questions/61964838/picocli-list-option-used-in-arggroup-duplicated-in-short-usage-string
+    @Test
+    public void testIssue1065DuplicateSynopsisVariant() {
+        String expected = String.format("" +
+                "Usage: MyApp [[-A=N]...]%n" +
+                "  -A=N%n");
+        String actual = new CommandLine(new Issue1065NoSplit()).getUsageMessage(Help.Ansi.OFF);
+        assertEquals(expected, actual);
+    }
+
+    @Command(name = "MyApp")
+    static class Issue1065ExclusiveGroupNoSplit {
+
+        @ArgGroup(exclusive = true)
+        MyGroup myGroup;
+
+        static class MyGroup {
+            @Option(names="-A", paramLabel="N") List<Long> A;
+        }
+    }
+    //https://stackoverflow.com/questions/61964838/picocli-list-option-used-in-arggroup-duplicated-in-short-usage-string
+    @Test
+    public void testIssue1065ExclusiveGroupNoSplitDuplicateSynopsisVariant() {
+        String expected = String.format("" +
+                "Usage: MyApp [-A=N [-A=N]...]%n" +
+                "  -A=N%n");
+        String actual = new CommandLine(new Issue1065ExclusiveGroupNoSplit()).getUsageMessage(Help.Ansi.OFF);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAllOptionsNested() {
+        class Nested {
+            @ArgGroup(exclusive = false, multiplicity = "0..*")
+            List<Outer1027> outers;
+        }
+
+        List<ArgGroupSpec> argGroupSpecs = new CommandLine(new Nested()).getCommandSpec().argGroups();
+        assertEquals(1, argGroupSpecs.size());
+        ArgGroupSpec group = argGroupSpecs.get(0);
+        List<OptionSpec> options = group.options();
+        assertEquals(1, options.size());
+        assertEquals("-x", options.get(0).shortestName());
+
+        List<OptionSpec> allOptions = group.allOptionsNested();
+        assertEquals(2, allOptions.size());
+        assertEquals("-x", allOptions.get(0).shortestName());
+        assertEquals("-y", allOptions.get(1).shortestName());
+    }
+
+    @Test
+    public void testAllOptionsNested2() {
+        List<ArgGroupSpec> argGroupSpecs = new CommandLine(new Issue988()).getCommandSpec().argGroups();
+        assertEquals(2, argGroupSpecs.size());
+        ArgGroupSpec projectOrTreeOptionsGroup = argGroupSpecs.get(0);
+        List<OptionSpec> options = projectOrTreeOptionsGroup.options();
+        assertEquals(0, options.size());
+
+        List<OptionSpec> allOptions = projectOrTreeOptionsGroup.allOptionsNested();
+        assertEquals(6, allOptions.size());
+        assertEquals("--cproject", allOptions.get(0).longestName());
+        assertEquals("--includetree", allOptions.get(1).longestName());
+        assertEquals("--excludetree", allOptions.get(2).longestName());
+        assertEquals("--ctree", allOptions.get(3).longestName());
+        assertEquals("--includebase", allOptions.get(4).longestName());
+        assertEquals("--excludebase", allOptions.get(5).longestName());
+
+        ArgGroupSpec generalOptionsGroup = argGroupSpecs.get(1);
+        assertEquals(2, generalOptionsGroup.options().size());
+        assertEquals(2, generalOptionsGroup.allOptionsNested().size());
+    }
+
+    @Test
+    public void testAllPositionalParametersNested() {
+        class Nested {
+            @ArgGroup(exclusive = false, multiplicity = "0..*")
+            List<Outer1027> outers;
+        }
+
+        List<ArgGroupSpec> argGroupSpecs = new CommandLine(new Nested()).getCommandSpec().argGroups();
+        assertEquals(1, argGroupSpecs.size());
+        ArgGroupSpec group = argGroupSpecs.get(0);
+        List<PositionalParamSpec> positionals = group.positionalParameters();
+        assertEquals(2, positionals.size());
+        assertEquals("<param0>", positionals.get(0).paramLabel());
+
+        List<PositionalParamSpec> allPositionals = group.allPositionalParametersNested();
+        assertEquals(4, allPositionals.size());
+        assertEquals("<param0>", allPositionals.get(0).paramLabel());
+        assertEquals("<param1>", allPositionals.get(1).paramLabel());
+        assertEquals("<param00>", allPositionals.get(2).paramLabel());
+        assertEquals("<param01>", allPositionals.get(3).paramLabel());
+    }
 }
